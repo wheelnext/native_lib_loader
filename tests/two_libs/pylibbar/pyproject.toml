@@ -1,0 +1,15 @@
+[build-system]
+requires = ["scikit-build-core", "libbar"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pylibbar"
+version = "0.0.1"
+dependencies = ["libbar"]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+cmake.minimum-version = "3.26.4"
+ninja.make-fallback = true
+wheel.packages = ["pylibbar"]
+sdist.exclude = ["pylibbar.c"]

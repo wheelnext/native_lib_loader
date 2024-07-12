@@ -1,0 +1,18 @@
+[build-system]
+requires = ["scikit-build-core"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "libbar"
+version = "0.0.1"
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+cmake.minimum-version = "3.26.4"
+ninja.make-fallback = true
+wheel.packages = ["libbar"]
+wheel.install-dir = "libbar"
+sdist.exclude = ["cpp"]
+
+[project.entry-points."cmake.prefix"]
+libbar = "libbar"
