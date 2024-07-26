@@ -98,29 +98,25 @@ def jinja_environment():
     )
 
 
-_TEMPLATE_DEFAULTS = {
-    "project_name": "example",
-}
-
 def generate_from_template(output_path, template_name, template_args=None):
     template = jinja_environment().get_template(template_name)
 
-    template_args = _TEMPLATE_DEFAULTS | (template_args or {})
+    template_args = template_args or {}
     content = template.render(**template_args)
     with open(output_path, mode="w", encoding="utf-8") as f:
         f.write(content)
 
 
-def make_cpp_lib(root):
+def make_cpp_lib(root, pkg_name):
     root = Path(root)
 
     lib_cmake_dir = root / f"cmake"
     os.makedirs(lib_cmake_dir, exist_ok=True)
 
-    generate_from_template(root / "CMakeLists.txt", "cpp_CMakeLists.txt")
-    generate_from_template(root / "example.h", "example.h")
-    generate_from_template(root / "example.c", "example.c")
-    generate_from_template(lib_cmake_dir / "config.cmake.in", "cpp_config.cmake.in")
+    generate_from_template(root / "CMakeLists.txt", "cpp_CMakeLists.txt", {"project_name": pkg_name})
+    generate_from_template(root / "example.h", "example.h", {"project_name": pkg_name})
+    generate_from_template(root / "example.c", "example.c", {"project_name": pkg_name})
+    generate_from_template(lib_cmake_dir / "config.cmake.in", "cpp_config.cmake.in", {"project_name": pkg_name})
 
 
 def make_cpp_pkg(root, pkg_name):
@@ -132,12 +128,12 @@ def make_cpp_pkg(root, pkg_name):
     lib_cmake_dir = lib_src_dir / f"cmake"
     os.makedirs(lib_cmake_dir, exist_ok=True)
 
-    generate_from_template(lib_pkg_dir / "CMakeLists.txt", "cpp_py_CMakeLists.txt")
-    generate_from_template(lib_pkg_dir / "pyproject.toml", "cpp_pyproject.toml")
-    generate_from_template(lib_dir / "__init__.py", "cpp___init__.py")
-    generate_from_template(lib_dir / "load.py", "load.py")
+    generate_from_template(lib_pkg_dir / "CMakeLists.txt", "cpp_py_CMakeLists.txt", {"project_name": pkg_name})
+    generate_from_template(lib_pkg_dir / "pyproject.toml", "cpp_pyproject.toml", {"project_name": pkg_name})
+    generate_from_template(lib_dir / "__init__.py", "cpp___init__.py", {"project_name": pkg_name})
+    generate_from_template(lib_dir / "load.py", "load.py", {"project_name": pkg_name})
 
-    make_cpp_lib(lib_src_dir)
+    make_cpp_lib(lib_src_dir, pkg_name)
 
 
 def make_python_pkg(root, pkg_name):
@@ -147,10 +143,10 @@ def make_python_pkg(root, pkg_name):
     pylib_dir = pylib_pkg_dir / f"pylib{pkg_name}"
     os.makedirs(pylib_dir, exist_ok=True)
 
-    generate_from_template(pylib_pkg_dir / "pyproject.toml", "py_pyproject.toml")
-    generate_from_template(pylib_pkg_dir / "CMakeLists.txt", "py_CMakeLists.txt")
-    generate_from_template(pylib_dir / "__init__.py", "py___init__.py")
-    generate_from_template(pylib_dir / "pylibexample.c", "pylibexample.c")
+    generate_from_template(pylib_pkg_dir / "pyproject.toml", "py_pyproject.toml", {"project_name": pkg_name})
+    generate_from_template(pylib_pkg_dir / "CMakeLists.txt", "py_CMakeLists.txt", {"project_name": pkg_name})
+    generate_from_template(pylib_dir / "__init__.py", "py___init__.py", {"project_name": pkg_name})
+    generate_from_template(pylib_dir / "pylibexample.c", "pylibexample.c", {"project_name": pkg_name})
 
 
 def test_basic():
