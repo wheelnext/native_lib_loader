@@ -28,6 +28,15 @@ class VEnv:
             clear=True,
             with_pip=True,
         )
+
+        self.cmd_base = [
+            self.executable,
+            "-m",
+            "pip",
+            "--disable-pip-version-check",
+            "--cache-dir",
+            self.cache_dir.name,
+        ]
         self._install_native_lib_loader()
 
     def _install_native_lib_loader(self):
@@ -56,16 +65,10 @@ class VEnv:
 
     def install(self, *args):
         return subprocess.run(
-            [
-                self.executable,
-                "-m",
-                "pip",
+            self.cmd_base + [
                 "install",
-                "--disable-pip-version-check",
                 "--find-links",
                 self.wheelhouse.name,
-                "--cache-dir",
-                self.cache_dir.name,
                 *args,
             ],
             check=True,
@@ -73,19 +76,13 @@ class VEnv:
 
     def wheel(self, package_dir, *args):
         return subprocess.run(
-            [
-                self.executable,
-                "-m",
-                "pip",
+            self.cmd_base + [
                 "wheel",
-                "--disable-pip-version-check",
                 "--no-deps",
                 "--wheel-dir",
                 self.wheelhouse.name,
                 "--find-links",
                 self.wheelhouse.name,
-                "--cache-dir",
-                self.cache_dir.name,
                 package_dir,
                 *args,
             ],
