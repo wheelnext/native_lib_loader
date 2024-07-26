@@ -110,7 +110,7 @@ def generate_from_template(output_path, template_name, template_args=None):
 def make_cpp_lib(root, pkg_name):
     root = Path(root)
 
-    lib_cmake_dir = root / f"cmake"
+    lib_cmake_dir = root / "cmake"
     os.makedirs(lib_cmake_dir, exist_ok=True)
 
     generate_from_template(root / "CMakeLists.txt", "cpp_CMakeLists.txt", {"project_name": pkg_name})
@@ -124,8 +124,8 @@ def make_cpp_pkg(root, pkg_name):
 
     lib_pkg_dir = root / f"lib{pkg_name}"
     lib_dir = lib_pkg_dir / f"lib{pkg_name}"
-    lib_src_dir = lib_dir / f"cpp"
-    lib_cmake_dir = lib_src_dir / f"cmake"
+    lib_src_dir = lib_dir / "cpp"
+    lib_cmake_dir = lib_src_dir / "cmake"
     os.makedirs(lib_cmake_dir, exist_ok=True)
 
     generate_from_template(lib_pkg_dir / "CMakeLists.txt", "cpp_py_CMakeLists.txt", {"project_name": pkg_name})
@@ -136,18 +136,31 @@ def make_cpp_pkg(root, pkg_name):
     make_cpp_lib(lib_src_dir, pkg_name)
 
 
-def make_python_pkg(root, pkg_name):
+def make_python_pkg(root, pkg_name, dependencies=None, build_dependencies=None):
     root = Path(root)
 
     pylib_pkg_dir = root / f"pylib{pkg_name}"
     pylib_dir = pylib_pkg_dir / f"pylib{pkg_name}"
     os.makedirs(pylib_dir, exist_ok=True)
 
-    generate_from_template(pylib_pkg_dir / "pyproject.toml", "py_pyproject.toml", {"project_name": pkg_name})
-    generate_from_template(pylib_pkg_dir / "CMakeLists.txt", "py_CMakeLists.txt", {"project_name": pkg_name})
-    generate_from_template(pylib_dir / "__init__.py", "py___init__.py", {"project_name": pkg_name})
-    generate_from_template(pylib_dir / "pylibexample.c", "pylibexample.c", {"project_name": pkg_name})
+    dependencies = dependencies or []
+    build_dependencies = build_dependencies or []
 
+    generate_from_template(pylib_pkg_dir / "pyproject.toml", "py_pyproject.toml", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+    generate_from_template(pylib_pkg_dir / "CMakeLists.txt", "py_CMakeLists.txt", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+    generate_from_template(pylib_dir / "__init__.py", "py___init__.py", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+    generate_from_template(pylib_dir / "pylibexample.c", "pylibexample.c", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+
+
+def build_cmake_project(root):
+    subprocess.run(
+        ["cmake", "-S", root, "-B", root / "build"],
+        check=True,
+    )
+    subprocess.run(
+        ["cmake", "--build", root / "build"],
+        check=True,
+    )
 
 def test_basic():
     """Test the generation of a basic library with a C++ and Python package.
@@ -157,12 +170,31 @@ def test_basic():
     """
     root = DIR / "basic_lib"
     make_cpp_pkg(root, "example")
-    make_python_pkg(root, "example")
+    make_python_pkg(root, "example", ["libexample"], ["scikit-build-core", "libexample"])
 
     env = VEnv()
     env.wheel(root / "libexample")
     env.wheel(root / "pylibexample")
 
 
+def test_lib_only_available_at_build():
+    """Test the behavior when a library is only available at build time.
+
+    In this case we expect to see runtime failures in the form of loader errors.
+    """
+    root = DIR / "lib_only_available_at_build"
+    make_cpp_lib(root / "cpp", "example")
+    make_python_pkg(root, "example", [], ["scikit-build-core"])
+
+    # TODO: I don't like that I'm hardcoding knowledge of the name prefix (lib) here. I
+    # should just change all the templates to use the name as-is, and the prefix should
+    # be added in the generator.
+    build_cmake_project(root / "cpp")
+
+    env = VEnv()
+    env.wheel(root / "pylibexample", "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH=" + str(root / "cpp" / "build"))
+
+
 if __name__ == "__main__":
     test_basic()
+    test_lib_only_available_at_build()
