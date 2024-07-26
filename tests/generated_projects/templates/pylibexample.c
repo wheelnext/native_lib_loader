@@ -10,13 +10,13 @@ static PyObject *square_wrapper(PyObject *self, PyObject *args) {
   return PyFloat_FromDouble(square(input));
 }
 
-static PyMethodDef pylibexample_methods[] = {
+static PyMethodDef pylib{{ project_name }}_methods[] = {
     {"square", square_wrapper, METH_VARARGS, "Square function"},
     {NULL, NULL, 0, NULL}};
 
-static struct PyModuleDef pylibexample_module = {PyModuleDef_HEAD_INIT, "pylibexample",
-                                             NULL, -1, pylibexample_methods};
+static struct PyModuleDef pylib{{ project_name }}_module = {PyModuleDef_HEAD_INIT, "pylib{{ project_name }}",
+                                             NULL, -1, pylib{{ project_name }}_methods};
 
-PyMODINIT_FUNC PyInit_pylibexample(void) {
-  return PyModule_Create(&pylibexample_module);
+PyMODINIT_FUNC PyInit_pylib{{ project_name }}(void) {
+  return PyModule_Create(&pylib{{ project_name }}_module);
 }

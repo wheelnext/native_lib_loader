@@ -6,14 +6,14 @@ project(
   LANGUAGES C
 )
 
-find_package(example REQUIRED)
+find_package({{ project_name }} REQUIRED)
 
 find_package(
   Python
   COMPONENTS Interpreter Development.Module
   REQUIRED)
 
-python_add_library(pylibexample MODULE pylibexample/pylibexample.c WITH_SOABI)
-target_link_libraries(pylibexample PRIVATE example::example)
+python_add_library(pylib{{ project_name }} MODULE pylib{{ project_name }}/pylibexample.c WITH_SOABI)
+target_link_libraries(pylib{{ project_name }} PRIVATE {{ project_name }}::{{ project_name }})
 
-install(TARGETS pylibexample DESTINATION pylibexample)
+install(TARGETS pylib{{ project_name }} DESTINATION pylib{{ project_name }})

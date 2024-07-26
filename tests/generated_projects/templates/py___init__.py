@@ -1,7 +1,7 @@
 import native_lib_loader
 
-native_lib_loader.consumer.load_library_module("libexample")
+native_lib_loader.consumer.load_library_module("lib{{ project_name }}")
 
-from . import pylibexample
+from . import pylib{{ project_name }}
 
-__all__ = ["pylibexample"]
+__all__ = ["pylib{{ project_name }}"]

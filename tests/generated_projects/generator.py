@@ -68,38 +68,29 @@ class VEnv:
                 self.cache_dir.name,
                 *args,
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
             check=True,
         )
 
     def wheel(self, package_dir, *args):
-        try:
-            return subprocess.run(
-                [
-                    self.executable,
-                    "-m",
-                    "pip",
-                    "wheel",
-                    "--disable-pip-version-check",
-                    "--no-deps",
-                    "--wheel-dir",
-                    self.wheelhouse.name,
-                    "--find-links",
-                    self.wheelhouse.name,
-                    "--cache-dir",
-                    self.cache_dir.name,
-                    package_dir,
-                    *args,
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                check=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print("Subprocess failed with output:")
-            print(e.stdout.decode("utf-8"))
-            raise
+        return subprocess.run(
+            [
+                self.executable,
+                "-m",
+                "pip",
+                "wheel",
+                "--disable-pip-version-check",
+                "--no-deps",
+                "--wheel-dir",
+                self.wheelhouse.name,
+                "--find-links",
+                self.wheelhouse.name,
+                "--cache-dir",
+                self.cache_dir.name,
+                package_dir,
+                *args,
+            ],
+            check=True,
+        )
 
 
 @lru_cache
@@ -110,10 +101,14 @@ def jinja_environment():
     )
 
 
+_TEMPLATE_DEFAULTS = {
+    "project_name": "example",
+}
+
 def generate_from_template(output_path, template_name, template_args=None):
     template = jinja_environment().get_template(template_name)
 
-    template_args = template_args or {}
+    template_args = _TEMPLATE_DEFAULTS | (template_args or {})
     content = template.render(**template_args)
     with open(output_path, mode="w", encoding="utf-8") as f:
         f.write(content)
@@ -162,6 +157,11 @@ def make_python_pkg(root, pkg_name):
 
 
 def test_basic():
+    """Test the generation of a basic library with a C++ and Python package.
+
+    In this case everything is largely expected to work. It's a single library with a
+    single function that is single-sourced.
+    """
     root = DIR / "basic_lib"
     make_cpp_pkg(root, "example")
     make_python_pkg(root, "example")

@@ -6,7 +6,7 @@ loader = native_lib_loader.library.LibraryLoader(
         os.path.dirname(os.path.abspath(__file__)),
         "lib"
     ),
-    "libexample.so",
+    "lib{{ project_name }}.so",
 )
 
 __all__ = [

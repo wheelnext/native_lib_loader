@@ -3,7 +3,7 @@ requires = ["scikit-build-core"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "libexample"
+name = "lib{{ project_name }}"
 version = "0.0.1"
 dependencies = [
     "native_lib_loader",
@@ -13,9 +13,9 @@ dependencies = [
 cmake.build-type = "Release"
 cmake.minimum-version = "3.26.4"
 ninja.make-fallback = true
-wheel.packages = ["libexample"]
-wheel.install-dir = "libexample"
+wheel.packages = ["lib{{ project_name }}"]
+wheel.install-dir = "lib{{ project_name }}"
 sdist.exclude = ["cpp"]
 
 [project.entry-points."cmake.prefix"]
-libexample = "libexample"
+lib{{ project_name }} = "lib{{ project_name }}"
