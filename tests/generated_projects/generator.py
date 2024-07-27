@@ -29,7 +29,7 @@ class VEnv:
             with_pip=True,
         )
 
-        self.cmd_base = [
+        self._pip_cmd_base = [
             self.executable,
             "-m",
             "pip",
@@ -65,7 +65,7 @@ class VEnv:
 
     def install(self, *args):
         return subprocess.run(
-            self.cmd_base + [
+            self._pip_cmd_base + [
                 "install",
                 "--find-links",
                 self.wheelhouse.name,
@@ -76,8 +76,9 @@ class VEnv:
 
     def wheel(self, package_dir, *args):
         return subprocess.run(
-            self.cmd_base + [
+            self._pip_cmd_base + [
                 "wheel",
+                "-v",
                 "--no-deps",
                 "--wheel-dir",
                 self.wheelhouse.name,
@@ -88,6 +89,13 @@ class VEnv:
             ],
             check=True,
         )
+
+    def run(self, code):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py") as f:
+            f.write(code)
+            f.flush()
+            script = f.name
+            return subprocess.run([self.executable, script], check=True)
 
 
 @lru_cache
@@ -175,6 +183,8 @@ def test_basic():
     env = VEnv()
     env.wheel(root / "libexample")
     env.wheel(root / "pylibexample")
+    env.install("pylibexample")
+    env.run("import pylibexample")
 
 
 def test_lib_only_available_at_build():
@@ -193,6 +203,8 @@ def test_lib_only_available_at_build():
 
     env = VEnv()
     env.wheel(root / "pylibexample", "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH=" + str(root / "cpp" / "build"))
+    env.install("pylibexample")
+    env.run("import pylibexample")
 
 
 if __name__ == "__main__":
