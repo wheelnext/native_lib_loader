@@ -10,10 +10,7 @@ class LibraryLoader:
     def load(self):
         # Try system library path first, then try the local path in the wheel.
         try:
-            lib = ctypes.CDLL(
-                self._lib,
-                ctypes.RTLD_GLOBAL
-            )
+            lib = ctypes.CDLL(self._lib, ctypes.RTLD_GLOBAL)
         except OSError:
             lib = ctypes.CDLL(
                 os.path.join(

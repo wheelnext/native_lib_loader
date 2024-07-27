@@ -16,6 +16,9 @@ repos:
     rev: v0.5.5
     hooks:
       - id: ruff-format
+        exclude: |
+          (?x)^(^tests/generated_projects/templates/.*)
+
 
 default_language_version:
       python: python3

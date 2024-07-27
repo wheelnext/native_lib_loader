@@ -48,4 +48,3 @@ foreach(tree_type BUILD INSTALL)
             NAMESPACE ${PROJECT_NAME}::)
   endif()
 endforeach()
-
