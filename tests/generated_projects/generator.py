@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 import shutil
 import tomlkit
+import textwrap
 
 from jinja2 import Environment, FileSystemLoader
 from packaging.version import parse as parse_version
@@ -17,17 +18,22 @@ NATIVE_LIB_DIR = DIR.parent.parent
 
 
 class VEnv:
-    # TODO: Support putting the environment in a specific location.
-    def __init__(self):
-        self.env_dir = tempfile.TemporaryDirectory()
-        self.cache_dir = tempfile.TemporaryDirectory()
-        self.executable = Path(self.env_dir.name) / "bin" / "python"
-        self.wheelhouse = tempfile.TemporaryDirectory()
-        venv.create(
-            self.env_dir.name,
-            clear=True,
-            with_pip=True,
-        )
+    def __init__(self, root):
+        self.env_dir = root / "env"
+        os.makedirs(self.env_dir, exist_ok=True)
+
+        self.wheelhouse = root / "wheelhouse"
+        self.cache_dir = root / "cache"
+
+        self.executable = Path(self.env_dir) / "bin" / "python"
+        # Allow for rerunning the script on preexisting test directories for local
+        # debugging and interactive exploration.
+        if not os.path.exists(self.executable):
+            venv.create(
+                self.env_dir,
+                clear=True,
+                with_pip=True,
+            )
 
         self._pip_cmd_base = [
             self.executable,
@@ -35,7 +41,7 @@ class VEnv:
             "pip",
             "--disable-pip-version-check",
             "--cache-dir",
-            self.cache_dir.name,
+            self.cache_dir,
         ]
         self._install_native_lib_loader()
 
@@ -68,7 +74,7 @@ class VEnv:
             self._pip_cmd_base + [
                 "install",
                 "--find-links",
-                self.wheelhouse.name,
+                self.wheelhouse,
                 *args,
             ],
             check=True,
@@ -81,9 +87,9 @@ class VEnv:
                 "-v",
                 "--no-deps",
                 "--wheel-dir",
-                self.wheelhouse.name,
+                self.wheelhouse,
                 "--find-links",
-                self.wheelhouse.name,
+                self.wheelhouse,
                 package_dir,
                 *args,
             ],
@@ -92,7 +98,7 @@ class VEnv:
 
     def run(self, code):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py") as f:
-            f.write(code)
+            f.write(textwrap.dedent(code))
             f.flush()
             script = f.name
             return subprocess.run([self.executable, script], check=True)
@@ -118,12 +124,15 @@ def generate_from_template(output_path, template_name, template_args=None):
 def make_cpp_lib(root, pkg_name):
     root = Path(root)
 
-    lib_cmake_dir = root / "cmake"
-    os.makedirs(lib_cmake_dir, exist_ok=True)
+    lib_src_dir = root / "cpp"
+    if os.path.exists(lib_src_dir):
+        return
+    lib_cmake_dir = lib_src_dir / "cmake"
+    os.makedirs(lib_cmake_dir)
 
-    generate_from_template(root / "CMakeLists.txt", "cpp_CMakeLists.txt", {"project_name": pkg_name})
-    generate_from_template(root / "example.h", "example.h", {"project_name": pkg_name})
-    generate_from_template(root / "example.c", "example.c", {"project_name": pkg_name})
+    generate_from_template(lib_src_dir / "CMakeLists.txt", "cpp_CMakeLists.txt", {"project_name": pkg_name})
+    generate_from_template(lib_src_dir / "example.h", "example.h", {"project_name": pkg_name})
+    generate_from_template(lib_src_dir / "example.c", "example.c", {"project_name": pkg_name})
     generate_from_template(lib_cmake_dir / "config.cmake.in", "cpp_config.cmake.in", {"project_name": pkg_name})
 
 
@@ -131,25 +140,27 @@ def make_cpp_pkg(root, pkg_name):
     root = Path(root)
 
     lib_pkg_dir = root / f"lib{pkg_name}"
+    if os.path.exists(lib_pkg_dir):
+        return
     lib_dir = lib_pkg_dir / f"lib{pkg_name}"
-    lib_src_dir = lib_dir / "cpp"
-    lib_cmake_dir = lib_src_dir / "cmake"
-    os.makedirs(lib_cmake_dir, exist_ok=True)
+    os.makedirs(lib_dir)
 
     generate_from_template(lib_pkg_dir / "CMakeLists.txt", "cpp_py_CMakeLists.txt", {"project_name": pkg_name})
     generate_from_template(lib_pkg_dir / "pyproject.toml", "cpp_pyproject.toml", {"project_name": pkg_name})
     generate_from_template(lib_dir / "__init__.py", "cpp___init__.py", {"project_name": pkg_name})
     generate_from_template(lib_dir / "load.py", "load.py", {"project_name": pkg_name})
 
-    make_cpp_lib(lib_src_dir, pkg_name)
+    make_cpp_lib(lib_dir, pkg_name)
 
 
 def make_python_pkg(root, pkg_name, dependencies=None, build_dependencies=None):
     root = Path(root)
 
     pylib_pkg_dir = root / f"pylib{pkg_name}"
+    if os.path.exists(pylib_pkg_dir):
+        return
     pylib_dir = pylib_pkg_dir / f"pylib{pkg_name}"
-    os.makedirs(pylib_dir, exist_ok=True)
+    os.makedirs(pylib_dir)
 
     dependencies = dependencies or []
     build_dependencies = build_dependencies or []
@@ -178,13 +189,18 @@ def test_basic():
     """
     root = DIR / "basic_lib"
     make_cpp_pkg(root, "example")
-    make_python_pkg(root, "example", ["libexample"], ["scikit-build-core", "libexample"])
+    make_python_pkg(root, "example", ["native_lib_loader", "libexample"], ["scikit-build-core", "libexample"])
 
-    env = VEnv()
+    env = VEnv(root)
     env.wheel(root / "libexample")
     env.wheel(root / "pylibexample")
-    env.install("pylibexample")
-    env.run("import pylibexample")
+    env.install("pylibexample", "--no-index")
+    env.run(
+        """
+        import pylibexample
+        print(f"The square of 4 is {pylibexample.pylibexample.square(4)}")
+        """
+    )
 
 
 def test_lib_only_available_at_build():
@@ -193,17 +209,17 @@ def test_lib_only_available_at_build():
     In this case we expect to see runtime failures in the form of loader errors.
     """
     root = DIR / "lib_only_available_at_build"
-    make_cpp_lib(root / "cpp", "example")
-    make_python_pkg(root, "example", [], ["scikit-build-core"])
+    make_cpp_lib(root, "example")
+    make_python_pkg(root, "example", ["native_lib_loader"], ["scikit-build-core"])
 
     # TODO: I don't like that I'm hardcoding knowledge of the name prefix (lib) here. I
     # should just change all the templates to use the name as-is, and the prefix should
     # be added in the generator.
     build_cmake_project(root / "cpp")
 
-    env = VEnv()
+    env = VEnv(root)
     env.wheel(root / "pylibexample", "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH=" + str(root / "cpp" / "build"))
-    env.install("pylibexample")
+    env.install("pylibexample", "--no-index")
     env.run("import pylibexample")
 
 
