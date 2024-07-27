@@ -6,4 +6,4 @@ project(
   LANGUAGES C
 )
 
-add_subdirectory(lib{{ project_name }}/cpp)
+add_subdirectory({{ package_name }}/cpp)

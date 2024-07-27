@@ -121,7 +121,7 @@ def generate_from_template(output_path, template_name, template_args=None):
         f.write(content)
 
 
-def make_cpp_lib(root, pkg_name):
+def make_cpp_lib(root, library_name):
     root = Path(root)
 
     lib_src_dir = root / "cpp"
@@ -130,45 +130,45 @@ def make_cpp_lib(root, pkg_name):
     lib_cmake_dir = lib_src_dir / "cmake"
     os.makedirs(lib_cmake_dir)
 
-    generate_from_template(lib_src_dir / "CMakeLists.txt", "cpp_CMakeLists.txt", {"project_name": pkg_name})
-    generate_from_template(lib_src_dir / "example.h", "example.h", {"project_name": pkg_name})
-    generate_from_template(lib_src_dir / "example.c", "example.c", {"project_name": pkg_name})
-    generate_from_template(lib_cmake_dir / "config.cmake.in", "cpp_config.cmake.in", {"project_name": pkg_name})
+    generate_from_template(lib_src_dir / "CMakeLists.txt", "cpp_CMakeLists.txt", {"library_name": library_name})
+    generate_from_template(lib_src_dir / "example.h", "example.h", {"library_name": library_name})
+    generate_from_template(lib_src_dir / "example.c", "example.c", {"library_name": library_name})
+    generate_from_template(lib_cmake_dir / "config.cmake.in", "cpp_config.cmake.in", {"library_name": library_name})
 
 
-def make_cpp_pkg(root, pkg_name):
+def make_cpp_pkg(root, package_name, library_name):
     root = Path(root)
 
-    lib_pkg_dir = root / f"lib{pkg_name}"
+    lib_pkg_dir = root / package_name
     if os.path.exists(lib_pkg_dir):
         return
-    lib_dir = lib_pkg_dir / f"lib{pkg_name}"
+    lib_dir = lib_pkg_dir / package_name
     os.makedirs(lib_dir)
 
-    generate_from_template(lib_pkg_dir / "CMakeLists.txt", "cpp_py_CMakeLists.txt", {"project_name": pkg_name})
-    generate_from_template(lib_pkg_dir / "pyproject.toml", "cpp_pyproject.toml", {"project_name": pkg_name})
-    generate_from_template(lib_dir / "__init__.py", "cpp___init__.py", {"project_name": pkg_name})
-    generate_from_template(lib_dir / "load.py", "load.py", {"project_name": pkg_name})
+    generate_from_template(lib_pkg_dir / "CMakeLists.txt", "cpp_py_CMakeLists.txt", {"package_name": package_name})
+    generate_from_template(lib_pkg_dir / "pyproject.toml", "cpp_pyproject.toml", {"package_name": package_name})
+    generate_from_template(lib_dir / "__init__.py", "cpp___init__.py")
+    generate_from_template(lib_dir / "load.py", "load.py", {"library_name": library_name})
 
-    make_cpp_lib(lib_dir, pkg_name)
+    make_cpp_lib(lib_dir, library_name)
 
 
-def make_python_pkg(root, pkg_name, dependencies=None, build_dependencies=None):
+def make_python_pkg(root, package_name, library_name, cpp_package_name, dependencies=None, build_dependencies=None):
     root = Path(root)
 
-    pylib_pkg_dir = root / f"pylib{pkg_name}"
+    pylib_pkg_dir = root / package_name
     if os.path.exists(pylib_pkg_dir):
         return
-    pylib_dir = pylib_pkg_dir / f"pylib{pkg_name}"
+    pylib_dir = pylib_pkg_dir / package_name
     os.makedirs(pylib_dir)
 
     dependencies = dependencies or []
     build_dependencies = build_dependencies or []
 
-    generate_from_template(pylib_pkg_dir / "pyproject.toml", "py_pyproject.toml", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
-    generate_from_template(pylib_pkg_dir / "CMakeLists.txt", "py_CMakeLists.txt", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
-    generate_from_template(pylib_dir / "__init__.py", "py___init__.py", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
-    generate_from_template(pylib_dir / "pylibexample.c", "pylibexample.c", {"project_name": pkg_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+    generate_from_template(pylib_pkg_dir / "pyproject.toml", "py_pyproject.toml", {"package_name": package_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+    generate_from_template(pylib_pkg_dir / "CMakeLists.txt", "py_CMakeLists.txt", {"library_name": library_name, "package_name": package_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+    generate_from_template(pylib_dir / "__init__.py", "py___init__.py", {"package_name": package_name, "cpp_package_name": cpp_package_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
+    generate_from_template(pylib_dir / "pylibexample.c", "pylibexample.c", {"package_name": package_name, "dependencies": dependencies, "build_dependencies": build_dependencies})
 
 
 def build_cmake_project(root):
@@ -181,6 +181,15 @@ def build_cmake_project(root):
         check=True,
     )
 
+
+def names(base_name):
+    """Standard name generation scheme for packaging tests."""
+    library_name = base_name
+    cpp_package_name = f"lib{library_name}"
+    python_package_name = f"pylib{library_name}"
+    return library_name, cpp_package_name, python_package_name
+
+
 def test_basic():
     """Test the generation of a basic library with a C++ and Python package.
 
@@ -188,8 +197,9 @@ def test_basic():
     single function that is single-sourced.
     """
     root = DIR / "basic_lib"
-    make_cpp_pkg(root, "example")
-    make_python_pkg(root, "example", ["native_lib_loader", "libexample"], ["scikit-build-core", "libexample"])
+    library_name, cpp_package_name, python_package_name = names("example")
+    make_cpp_pkg(root, cpp_package_name, library_name)
+    make_python_pkg(root, python_package_name, library_name, cpp_package_name, ["native_lib_loader", "libexample"], ["scikit-build-core", "libexample"])
 
     env = VEnv(root)
     env.wheel(root / "libexample")
@@ -209,12 +219,10 @@ def test_lib_only_available_at_build():
     In this case we expect to see runtime failures in the form of loader errors.
     """
     root = DIR / "lib_only_available_at_build"
-    make_cpp_lib(root, "example")
-    make_python_pkg(root, "example", ["native_lib_loader"], ["scikit-build-core"])
+    library_name, cpp_package_name, python_package_name = names("example")
+    make_cpp_lib(root, library_name)
+    make_python_pkg(root, python_package_name, library_name, cpp_package_name, ["native_lib_loader"], ["scikit-build-core"])
 
-    # TODO: I don't like that I'm hardcoding knowledge of the name prefix (lib) here. I
-    # should just change all the templates to use the name as-is, and the prefix should
-    # be added in the generator.
     build_cmake_project(root / "cpp")
 
     env = VEnv(root)

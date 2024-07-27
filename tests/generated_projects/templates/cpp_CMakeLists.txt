@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-project({{ project_name }} VERSION 0.0.1 LANGUAGES C)
+project({{ library_name }} VERSION 0.0.1 LANGUAGES C)
 
-add_library({{ project_name }} SHARED example.c)
-target_include_directories({{ project_name }} PUBLIC "$<INSTALL_INTERFACE:include>" "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
+add_library({{ library_name }} SHARED example.c)
+target_include_directories({{ library_name }} PUBLIC "$<INSTALL_INTERFACE:include>" "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 
 include(GNUInstallDirs)
 install(
-  TARGETS {{ project_name }}
+  TARGETS {{ library_name }}
   DESTINATION ${CMAKE_INSTALL_LIBDIR}
   EXPORT ${PROJECT_NAME}-exports
 )

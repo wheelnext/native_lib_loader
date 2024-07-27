@@ -1,7 +1,7 @@
 import native_lib_loader
 
-native_lib_loader.consumer.load_library_module("lib{{ project_name }}")
+native_lib_loader.consumer.load_library_module("{{ cpp_package_name }}")
 
-from . import pylib{{ project_name }}
+from . import {{ package_name }}
 
-__all__ = ["pylib{{ project_name }}"]
+__all__ = ["{{ package_name }}"]

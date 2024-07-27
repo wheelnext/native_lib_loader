@@ -7,7 +7,7 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "pylib{{ project_name }}"
+name = "{{ package_name }}"
 version = "0.0.1"
 dependencies = [
 {% for dependency in dependencies %}
@@ -19,5 +19,5 @@ dependencies = [
 cmake.build-type = "Release"
 cmake.minimum-version = "3.26.4"
 ninja.make-fallback = true
-wheel.packages = ["pylib{{ project_name }}"]
+wheel.packages = ["{{ package_name }}"]
 sdist.exclude = ["pylibexample.c"]
