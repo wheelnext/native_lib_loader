@@ -13,3 +13,34 @@ authors = [
 license = { text = "Apache 2.0" }
 # TODO: Determine minimum Python version
 requires-python = ">=3.9"
+
+[tool.ruff]
+exclude = [
+    "tests/basic_lib",
+    "tests/two_libs",
+    "tests/two_identical_libs",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Ignore missing docstrings on special methods like __init__
+    "ANN204",
+    # Prefer D211
+    "D203",
+    # Prefer D212
+    "D213",
+    # Document __init__ in class docstring
+    "D107",
+    # No security checks.
+    "S",
+    # Don't force avoiding namespace packages
+    "INP001",
+    # Ignore rules that conflict with the formatter
+    "COM812",
+    "ISC001",
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.pylint]
+max-args = 6
