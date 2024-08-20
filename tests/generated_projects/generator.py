@@ -84,7 +84,7 @@ class VEnv:
 
         self.wheel(native_lib_loader_dir.name)
 
-    def install(self, *args: list) -> None:
+    def install(self, *args: str) -> subprocess.CompletedProcess:
         """Install a package into the virtual environment with `pip install`.
 
         Parameters
@@ -106,12 +106,14 @@ class VEnv:
             check=True,
         )
 
-    def wheel(self, package_dir: PathLike, *args: list) -> None:
+    def wheel(
+        self, package_dir: PathLike | str, *args: str
+    ) -> subprocess.CompletedProcess:
         """Build a wheel with `pip wheel`.
 
         Parameters
         ----------
-        package_dir : PathLike
+        package_dir : PathLike or str
             The directory containing the package to build.
         *args
             Arguments to pass to `pip install`.
@@ -134,7 +136,7 @@ class VEnv:
             check=True,
         )
 
-    def run(self, code: str) -> None:
+    def run(self, code: str) -> subprocess.CompletedProcess:
         """Run Python code in the virtual environment.
 
         Parameters
@@ -164,7 +166,7 @@ def jinja_environment() -> Environment:
 
 
 def generate_from_template(
-    output_path: PathLike,
+    output_path: PathLike | str,
     template_name: str,
     template_args: dict | None = None,
 ) -> None:
@@ -172,7 +174,7 @@ def generate_from_template(
 
     Parameters
     ----------
-    output_path : PathLike
+    output_path : PathLike or str
         The path to write the generated file to.
     template_name : str
         The name of the template file to use.
@@ -188,12 +190,12 @@ def generate_from_template(
         f.write(content)
 
 
-def make_cpp_lib(root: PathLike, library_name: str) -> None:
+def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
     """Generate a standard C++ library with a CMake build system.
 
     Parameters
     ----------
-    root : PathLike
+    root : PathLike or str
         The root directory for the library.
     library_name : str
         The name of the library.
@@ -229,12 +231,12 @@ def make_cpp_lib(root: PathLike, library_name: str) -> None:
     )
 
 
-def make_cpp_pkg(root: PathLike, package_name: str, library_name: str) -> None:
+def make_cpp_pkg(root: PathLike | str, package_name: str, library_name: str) -> None:
     """Generate a Python package exporting a native library.
 
     Parameters
     ----------
-    root : PathLike
+    root : PathLike or str
         The root directory for the package.
     package_name : str
         The name of the package.
@@ -271,7 +273,7 @@ def make_cpp_pkg(root: PathLike, package_name: str, library_name: str) -> None:
 
 
 def make_python_pkg(
-    root: PathLike,
+    root: PathLike | str,
     package_name: str,
     library_name: str,
     cpp_package_name: str,
@@ -282,7 +284,7 @@ def make_python_pkg(
 
     Parameters
     ----------
-    root : PathLike
+    root : PathLike or str
         The root directory for the package.
     package_name : str
         The name of the package.
@@ -347,15 +349,17 @@ def make_python_pkg(
     )
 
 
-def build_cmake_project(root: PathLike) -> None:
+def build_cmake_project(root: PathLike | str) -> None:
     """Build a CMake project.
 
     Parameters
     ----------
-    root : PathLike
+    root : PathLike or str
         The root directory for the project.
 
     """
+    root = Path(root)
+
     subprocess.run(
         ["cmake", "-S", root, "-B", root / "build"],
         check=True,
