@@ -400,9 +400,9 @@ def test_basic() -> None:
     )
 
     env = VEnv(root)
-    env.wheel(root / "libexample")
-    env.wheel(root / "pylibexample")
-    env.install("pylibexample", "--no-index")
+    env.wheel(root / cpp_package_name)
+    env.wheel(root / python_package_name)
+    env.install(python_package_name, "--no-index")
     env.run(
         """
         import pylibexample
@@ -432,18 +432,18 @@ def test_lib_only_available_at_build() -> None:
 
     env = VEnv(root)
     env.wheel(
-        root / "pylibexample",
+        root / python_package_name,
         "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH="
         + str(root / "cpp" / "build"),
     )
-    env.install("pylibexample", "--no-index")
+    env.install(python_package_name, "--no-index")
 
     # TODO: Change to pytest once we're using that
     try:
-        env.run("import pylibexample")
+        env.run(f"import {python_package_name}")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
-        assert "ImportError: libexample.so" in stderr
+        assert f"ImportError: lib{library_name}.so" in stderr
 
 
 if __name__ == "__main__":
