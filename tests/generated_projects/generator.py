@@ -40,7 +40,7 @@ class VEnv:
         self.wheelhouse = root / "wheelhouse"
         self.cache_dir = root / "cache"
 
-        self.executable = Path(self.env_dir) / "bin" / "python"
+        self.executable = str(Path(self.env_dir) / "bin" / "python")
         # Allow for rerunning the script on preexisting test directories for local
         # debugging and interactive exploration.
         if not Path(self.executable).exists:
@@ -79,7 +79,7 @@ class VEnv:
 
         version = parse_version(project_data["version"])
         project_data["version"] = f"{version.major + 1}.{version.minor}.{version.micro}"
-        with Path(pyproject_file, "w").open() as f:
+        with Path(pyproject_file).open("w") as f:
             tomlkit.dump(pyproject, f)
 
         self.wheel(native_lib_loader_dir.name)
@@ -95,7 +95,7 @@ class VEnv:
         """
         return subprocess.run(
             [
-                self._pip_cmd_base,
+                *self._pip_cmd_base,
                 *(
                     "install",
                     "--find-links",
@@ -119,10 +119,9 @@ class VEnv:
         """
         return subprocess.run(
             [
-                self._pip_cmd_base,
+                *self._pip_cmd_base,
                 *(
                     "wheel",
-                    "-v",
                     "--no-deps",
                     "--wheel-dir",
                     self.wheelhouse,
@@ -148,7 +147,9 @@ class VEnv:
             f.write(textwrap.dedent(code))
             f.flush()
             script = f.name
-            return subprocess.run([self.executable, script], check=True)
+            return subprocess.run(
+                [self.executable, script], capture_output=True, check=True
+            )
 
 
 @lru_cache
@@ -436,7 +437,13 @@ def test_lib_only_available_at_build() -> None:
         + str(root / "cpp" / "build"),
     )
     env.install("pylibexample", "--no-index")
-    env.run("import pylibexample")
+
+    # TODO: Change to pytest once we're using that
+    try:
+        env.run("import pylibexample")
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode()
+        assert "ImportError: libexample.so" in stderr
 
 
 if __name__ == "__main__":

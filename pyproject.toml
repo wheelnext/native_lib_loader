@@ -39,6 +39,10 @@ ignore = [
     # Ignore rules that conflict with the formatter
     "COM812",
     "ISC001",
+    # Don't require author or links in TODOs, and allow them to exist.
+    "TD002",
+    "TD003",
+    "FIX002",
 ]
 fixable = ["ALL"]
 
