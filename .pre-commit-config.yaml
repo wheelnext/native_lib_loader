@@ -22,6 +22,15 @@ repos:
         exclude: |
           (?x)^(^tests/generated_projects/templates/.*)
         args: ["--fix"]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: 'v1.11.1'
+    hooks:
+      - id: mypy
+        args: ["--config-file=pyproject.toml"]
+        exclude: |
+          (?x)^(
+            ^tests/generated_projects/templates/.*
+          )
 
 
 default_language_version:

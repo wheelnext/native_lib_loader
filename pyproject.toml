@@ -48,3 +48,9 @@ fixable = ["ALL"]
 
 [tool.ruff.lint.pylint]
 max-args = 6
+
+[tool.mypy]
+ignore_missing_imports = true
+exclude = [
+    "tests/generated_projects/templates/.*",
+ ]

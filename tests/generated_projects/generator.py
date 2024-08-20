@@ -37,20 +37,20 @@ class VEnv:
         self.env_dir = root / "env"
         Path(self.env_dir).mkdir(exist_ok=True)
 
-        self.wheelhouse = root / "wheelhouse"
-        self.cache_dir = root / "cache"
+        self.wheelhouse = str(root / "wheelhouse")
+        self.cache_dir = str(root / "cache")
 
         self.executable = str(Path(self.env_dir) / "bin" / "python")
         # Allow for rerunning the script on preexisting test directories for local
         # debugging and interactive exploration.
-        if not Path(self.executable).exists:
+        if not Path(self.executable).exists():
             venv.create(
                 self.env_dir,
                 clear=True,
                 with_pip=True,
             )
 
-        self._pip_cmd_base = [
+        self._pip_cmd_base: list[str] = [
             self.executable,
             "-m",
             "pip",
@@ -204,7 +204,7 @@ def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
     root = Path(root)
 
     lib_src_dir = root / "cpp"
-    if Path(lib_src_dir).exists:
+    if Path(lib_src_dir).exists():
         return
     lib_cmake_dir = lib_src_dir / "cmake"
     Path(lib_cmake_dir)
@@ -247,7 +247,7 @@ def make_cpp_pkg(root: PathLike | str, package_name: str, library_name: str) -> 
     root = Path(root)
 
     lib_pkg_dir = root / package_name
-    if Path(lib_pkg_dir).exists:
+    if Path(lib_pkg_dir).exists():
         return
     lib_dir = lib_pkg_dir / package_name
     Path(lib_dir)
@@ -301,7 +301,7 @@ def make_python_pkg(
     root = Path(root)
 
     pylib_pkg_dir = root / package_name
-    if Path(pylib_pkg_dir).exists:
+    if Path(pylib_pkg_dir).exists():
         return
     pylib_dir = pylib_pkg_dir / package_name
     Path(pylib_dir)
