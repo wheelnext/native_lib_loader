@@ -1,9 +1,0 @@
-cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
-
-project(
-  ${SKBUILD_PROJECT_NAME}
-  VERSION 0.0.1
-  LANGUAGES C
-)
-
-add_subdirectory(libfoo/cpp)
