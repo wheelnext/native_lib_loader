@@ -7,10 +7,17 @@ from pathlib import Path
 
 
 class LoadMode(Enum):
-    """Enumeration of the load modes for a library."""
+    """Mode of the dynamic loader to use when loading the library."""
 
     LOCAL = auto()
     GLOBAL = auto()
+
+
+class LoadOrder(Enum):
+    """Order in which system vs. package-local libraries should be loaded."""
+
+    ALLOW_SYSTEM = auto()
+    REQUIRE_LOCAL = auto()
 
 
 class LibraryLoader:
@@ -27,6 +34,8 @@ class LibraryLoader:
         available for resolution to all subsequently loaded libraries, whereas local
         loading only populates the loader's list of loaded libraries without polluting
         the symbol table.
+    load_order : LoadOrder
+        Whether or not to try loading a system library before the local version.
 
     """
 
@@ -35,22 +44,24 @@ class LibraryLoader:
         path_to_local_lib: PathLike,
         lib_name: str,
         mode: LoadMode = LoadMode.GLOBAL,
+        order: LoadOrder = LoadOrder.ALLOW_SYSTEM,
     ):
         self._path = path_to_local_lib
         self._lib = lib_name
         self._mode = (
             ctypes.RTLD_GLOBAL if mode == LoadMode.GLOBAL else ctypes.RTLD_LOCAL
         )
+        self._order = order
 
     def load(self) -> ctypes.CDLL:
         """Load the native library and return the ctypes.CDLL object."""
-        # Try system library path first, then try the local path in the wheel.
-        try:
-            lib = ctypes.CDLL(self._lib, self._mode)
-        except OSError:
-            lib = ctypes.CDLL(
-                str(Path(self._path) / self._lib),
-                mode=self._mode,
-            )
+        if self._order == LoadOrder.ALLOW_SYSTEM:
+            try:
+                return ctypes.CDLL(self._lib, self._mode)
+            except OSError:
+                pass
 
-        return lib
+        return ctypes.CDLL(
+            str(Path(self._path) / self._lib),
+            mode=self._mode,
+        )
