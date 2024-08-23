@@ -199,7 +199,9 @@ def generate_from_template(
         f.write(content)
 
 
-def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
+def make_cpp_lib(
+    root: PathLike | str, library_name: str, *, square_as_cube: bool = False
+) -> None:
     """Generate a standard C++ library with a CMake build system.
 
     Parameters
@@ -208,6 +210,8 @@ def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
         The root directory for the library.
     library_name : str
         The name of the library.
+    square_as_cube : bool, optional
+        Whether to implement the square function as a cube function.
 
     """
     root = Path(root)
@@ -231,7 +235,7 @@ def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
     generate_from_template(
         lib_src_dir / "example.c",
         "example.c",
-        {"library_name": library_name},
+        {"library_name": library_name, "square_as_cube": square_as_cube},
     )
     generate_from_template(
         lib_cmake_dir / "config.cmake.in",
@@ -241,7 +245,12 @@ def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
 
 
 def make_cpp_pkg(
-    root: PathLike | str, package_name: str, library_name: str, load_mode: str
+    root: PathLike | str,
+    package_name: str,
+    library_name: str,
+    load_mode: str,
+    *,
+    square_as_cube: bool = False,
 ) -> None:
     """Generate a Python package exporting a native library.
 
@@ -255,6 +264,8 @@ def make_cpp_pkg(
         The name of the library.
     load_mode : str
         Whether the C++ library should be loaded globally or locally.
+    square_as_cube : bool, optional
+        Whether to implement the square function as a cube function.
 
     """
     root = Path(root)
@@ -286,7 +297,7 @@ def make_cpp_pkg(
         {"library_name": library_name, "load_mode": load_mode},
     )
 
-    make_cpp_lib(lib_dir, library_name)
+    make_cpp_lib(lib_dir, library_name, square_as_cube=square_as_cube)
 
 
 def make_python_pkg(
@@ -402,6 +413,9 @@ def names(base_name: str) -> tuple[str, str, str]:
     return library_name, cpp_package_name, python_package_name
 
 
+#############################################
+# Test cases
+#############################################
 def test_basic(load_mode: str) -> None:
     """Test the generation of a basic library with a C++ and Python package.
 
@@ -414,9 +428,9 @@ def test_basic(load_mode: str) -> None:
         Whether the C++ library should be loaded globally or locally.
 
     """
-    root = DIR / "basic_lib"
+    root = DIR / f"basic_lib_{load_mode.lower()}"
     library_name, cpp_package_name, python_package_name = names("example")
-    make_cpp_pkg(root, cpp_package_name, library_name, load_mode)
+    make_cpp_pkg(root, cpp_package_name, library_name, load_mode, square_as_cube=False)
     make_python_pkg(
         root,
         python_package_name,
@@ -434,6 +448,7 @@ def test_basic(load_mode: str) -> None:
         """
         import pylibexample
         print(f"The square of 4 is {pylibexample.pylibexample.square(4)}")
+        assert pylibexample.pylibexample.square(4) == 16
         """,
     )
 
@@ -450,9 +465,11 @@ def test_two_libs(load_mode: str) -> None:
         Whether the C++ library should be loaded globally or locally.
 
     """
-    root = DIR / "two_libs"
+    root = DIR / f"two_libs_{load_mode.lower()}"
     foo_library_name, foo_cpp_package_name, foo_python_package_name = names("foo")
-    make_cpp_pkg(root, foo_cpp_package_name, foo_library_name, load_mode)
+    make_cpp_pkg(
+        root, foo_cpp_package_name, foo_library_name, load_mode, square_as_cube=False
+    )
     make_python_pkg(
         root,
         foo_python_package_name,
@@ -463,7 +480,9 @@ def test_two_libs(load_mode: str) -> None:
     )
 
     bar_library_name, bar_cpp_package_name, bar_python_package_name = names("bar")
-    make_cpp_pkg(root, bar_cpp_package_name, bar_library_name, load_mode)
+    make_cpp_pkg(
+        root, bar_cpp_package_name, bar_library_name, load_mode, square_as_cube=True
+    )
     make_python_pkg(
         root,
         bar_python_package_name,
@@ -486,8 +505,10 @@ def test_two_libs(load_mode: str) -> None:
         """
         import pylibfoo
         print(f"The square of 4 is {pylibfoo.pylibfoo.square(4)}")
+        assert pylibfoo.pylibfoo.square(4) == 16
         import pylibbar
-        print(f"The square of 4 is {pylibbar.pylibbar.square(4)}")
+        print(f"The 'square' (actually cube) of 4 is {pylibbar.pylibbar.square(4)}")
+        assert pylibbar.pylibbar.square(4) == 64
         """,
     )
 
@@ -531,4 +552,10 @@ if __name__ == "__main__":
     test_basic("LOCAL")
     test_basic("GLOBAL")
     test_lib_only_available_at_build()
-    test_two_libs("GLOBAL")
+    test_two_libs("LOCAL")
+    try:
+        # Global loads should fail due to symbol conflicts
+        test_two_libs("GLOBAL")
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode()
+        assert "AssertionError" in stderr
