@@ -186,7 +186,7 @@ def generate_from_template(
 
     template_args = template_args or {}
     content = template.render(**template_args)
-    with Path(output_path, mode="w", encoding="utf-8").open() as f:
+    with Path(output_path).open(mode="w", encoding="utf-8") as f:
         f.write(content)
 
 
@@ -204,10 +204,10 @@ def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
     root = Path(root)
 
     lib_src_dir = root / "cpp"
-    if Path(lib_src_dir).exists():
-        return
     lib_cmake_dir = lib_src_dir / "cmake"
-    Path(lib_cmake_dir)
+    if lib_cmake_dir.exists():
+        return
+    lib_cmake_dir.mkdir(parents=True)
 
     generate_from_template(
         lib_src_dir / "CMakeLists.txt",
@@ -247,10 +247,10 @@ def make_cpp_pkg(root: PathLike | str, package_name: str, library_name: str) -> 
     root = Path(root)
 
     lib_pkg_dir = root / package_name
-    if Path(lib_pkg_dir).exists():
-        return
     lib_dir = lib_pkg_dir / package_name
-    Path(lib_dir)
+    if lib_dir.exists():
+        return
+    lib_dir.mkdir(parents=True)
 
     generate_from_template(
         lib_pkg_dir / "CMakeLists.txt",
@@ -301,10 +301,10 @@ def make_python_pkg(
     root = Path(root)
 
     pylib_pkg_dir = root / package_name
-    if Path(pylib_pkg_dir).exists():
-        return
     pylib_dir = pylib_pkg_dir / package_name
-    Path(pylib_dir)
+    if pylib_dir.exists():
+        return
+    pylib_dir.mkdir(parents=True)
 
     dependencies = dependencies or []
     build_dependencies = build_dependencies or []
