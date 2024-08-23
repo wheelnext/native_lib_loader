@@ -231,7 +231,9 @@ def make_cpp_lib(root: PathLike | str, library_name: str) -> None:
     )
 
 
-def make_cpp_pkg(root: PathLike | str, package_name: str, library_name: str) -> None:
+def make_cpp_pkg(
+    root: PathLike | str, package_name: str, library_name: str, load_mode: str
+) -> None:
     """Generate a Python package exporting a native library.
 
     Parameters
@@ -242,6 +244,8 @@ def make_cpp_pkg(root: PathLike | str, package_name: str, library_name: str) -> 
         The name of the package.
     library_name : str
         The name of the library.
+    load_mode : str
+        Whether the C++ library should be loaded globally or locally.
 
     """
     root = Path(root)
@@ -263,10 +267,14 @@ def make_cpp_pkg(root: PathLike | str, package_name: str, library_name: str) -> 
         {"package_name": package_name},
     )
     generate_from_template(lib_dir / "__init__.py", "cpp___init__.py")
+
+    if load_mode not in ("LOCAL", "GLOBAL"):
+        msg = f"Invalid load mode: {load_mode}"
+        raise ValueError(msg)
     generate_from_template(
         lib_dir / "load.py",
         "load.py",
-        {"library_name": library_name},
+        {"library_name": library_name, "load_mode": load_mode},
     )
 
     make_cpp_lib(lib_dir, library_name)
@@ -385,15 +393,21 @@ def names(base_name: str) -> tuple[str, str, str]:
     return library_name, cpp_package_name, python_package_name
 
 
-def test_basic() -> None:
+def test_basic(load_mode: str) -> None:
     """Test the generation of a basic library with a C++ and Python package.
 
     In this case everything is largely expected to work. It's a single library with a
     single function that is single-sourced.
+
+    Parameters
+    ----------
+    load_mode : str
+        Whether the C++ library should be loaded globally or locally.
+
     """
     root = DIR / "basic_lib"
     library_name, cpp_package_name, python_package_name = names("example")
-    make_cpp_pkg(root, cpp_package_name, library_name)
+    make_cpp_pkg(root, cpp_package_name, library_name, load_mode)
     make_python_pkg(
         root,
         python_package_name,
@@ -451,5 +465,6 @@ def test_lib_only_available_at_build() -> None:
 
 
 if __name__ == "__main__":
-    test_basic()
+    test_basic("LOCAL")
+    test_basic("GLOBAL")
     test_lib_only_available_at_build()
