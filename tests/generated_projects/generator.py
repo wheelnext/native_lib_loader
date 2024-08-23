@@ -149,9 +149,18 @@ class VEnv:
             f.write(textwrap.dedent(code))
             f.flush()
             script = f.name
-            return subprocess.run(
-                [self.executable, script], capture_output=True, check=True
-            )
+            try:
+                return subprocess.run(
+                    [self.executable, script], capture_output=True, check=True
+                )
+            except subprocess.CalledProcessError as e:
+                print("Error running script:")  # noqa: T201
+                print("stdout:")  # noqa: T201
+                print(e.stdout.decode())  # noqa: T201
+                print()  # noqa: T201
+                print("stderr:")  # noqa: T201
+                print(e.stderr.decode())  # noqa: T201
+                raise
 
 
 @lru_cache
@@ -429,6 +438,60 @@ def test_basic(load_mode: str) -> None:
     )
 
 
+def test_two_libs(load_mode: str) -> None:
+    """Test the generation of a basic library with a C++ and Python package.
+
+    In this case everything is largely expected to work. It's a single library with a
+    single function that is single-sourced.
+
+    Parameters
+    ----------
+    load_mode : str
+        Whether the C++ library should be loaded globally or locally.
+
+    """
+    root = DIR / "two_libs"
+    foo_library_name, foo_cpp_package_name, foo_python_package_name = names("foo")
+    make_cpp_pkg(root, foo_cpp_package_name, foo_library_name, load_mode)
+    make_python_pkg(
+        root,
+        foo_python_package_name,
+        foo_library_name,
+        foo_cpp_package_name,
+        ["native_lib_loader", "libfoo"],
+        ["scikit-build-core", "libfoo"],
+    )
+
+    bar_library_name, bar_cpp_package_name, bar_python_package_name = names("bar")
+    make_cpp_pkg(root, bar_cpp_package_name, bar_library_name, load_mode)
+    make_python_pkg(
+        root,
+        bar_python_package_name,
+        bar_library_name,
+        bar_cpp_package_name,
+        ["native_lib_loader", "libbar"],
+        ["scikit-build-core", "libbar"],
+    )
+
+    env = VEnv(root)
+    env.wheel(root / foo_cpp_package_name)
+    env.wheel(root / foo_python_package_name)
+    env.install(foo_python_package_name, "--no-index")
+
+    env.wheel(root / bar_cpp_package_name)
+    env.wheel(root / bar_python_package_name)
+    env.install(bar_python_package_name, "--no-index")
+
+    env.run(
+        """
+        import pylibfoo
+        print(f"The square of 4 is {pylibfoo.pylibfoo.square(4)}")
+        import pylibbar
+        print(f"The square of 4 is {pylibbar.pylibbar.square(4)}")
+        """,
+    )
+
+
 def test_lib_only_available_at_build() -> None:
     """Test the behavior when a library is only available at build time.
 
@@ -468,3 +531,4 @@ if __name__ == "__main__":
     test_basic("LOCAL")
     test_basic("GLOBAL")
     test_lib_only_available_at_build()
+    test_two_libs("GLOBAL")
