@@ -84,15 +84,25 @@ class VEnv:
 
         self.wheel(native_lib_loader_dir.name)
 
-    def install(self, *args: str) -> subprocess.CompletedProcess:
+    def install(
+        self, package_name: str, *args: str, editable: bool = False
+    ) -> subprocess.CompletedProcess:
         """Install a package into the virtual environment with `pip install`.
 
         Parameters
         ----------
+        package_name : str
+            The name of the package to install.
         *args
             Arguments to pass to `pip install`.
+        editable : bool, optional
+            Whether to install the package in editable mode.
 
         """
+        pkg_args = [package_name]
+        if editable:
+            pkg_args.insert(0, "-e")
+
         return subprocess.run(
             [
                 *self._pip_cmd_base,
@@ -102,6 +112,7 @@ class VEnv:
                     self.wheelhouse,
                     *args,
                 ),
+                *pkg_args,
             ],
             check=True,
         )
@@ -161,6 +172,20 @@ class VEnv:
                 print("stderr:")  # noqa: T201
                 print(e.stderr.decode())  # noqa: T201
                 raise
+
+
+def test_dir(base_name: str, *args: str) -> Path:
+    """Generate a test directory path based on the test case name.
+
+    Parameters
+    ----------
+    base_name : str
+        The base name for the test case.
+    *args
+        Additional strings to include in the test directory name.
+
+    """
+    return DIR / f"{base_name}_{'_'.join(arg.lower() for arg in args)}"
 
 
 @lru_cache
@@ -300,13 +325,15 @@ def make_cpp_pkg(
     make_cpp_lib(lib_dir, library_name, square_as_cube=square_as_cube)
 
 
-def make_python_pkg(
+def make_python_pkg(  # noqa: PLR0913
     root: PathLike | str,
     package_name: str,
     library_name: str,
     cpp_package_name: str,
     dependencies: list | None = None,
     build_dependencies: list | None = None,
+    *,
+    load_dynamic_lib: bool = True,
 ) -> None:
     """Generate a Python package with a native library dependency.
 
@@ -324,6 +351,8 @@ def make_python_pkg(
         The runtime dependencies for the package.
     build_dependencies : list, optional
         The build dependencies for the package.
+    load_dynamic_lib : bool, optional
+        Whether to load the dynamic library.
 
     """
     root = Path(root)
@@ -364,6 +393,7 @@ def make_python_pkg(
             "cpp_package_name": cpp_package_name,
             "dependencies": dependencies,
             "build_dependencies": build_dependencies,
+            "load_dynamic_lib": load_dynamic_lib,
         },
     )
     generate_from_template(
@@ -428,7 +458,7 @@ def test_basic(load_mode: str) -> None:
         Whether the C++ library should be loaded globally or locally.
 
     """
-    root = DIR / f"basic_lib_{load_mode.lower()}"
+    root = test_dir("basic_lib", load_mode)
     library_name, cpp_package_name, python_package_name = names("example")
     make_cpp_pkg(root, cpp_package_name, library_name, load_mode, square_as_cube=False)
     make_python_pkg(
@@ -438,6 +468,7 @@ def test_basic(load_mode: str) -> None:
         cpp_package_name,
         ["native_lib_loader", "libexample"],
         ["scikit-build-core", "libexample"],
+        load_dynamic_lib=True,
     )
 
     env = VEnv(root)
@@ -465,7 +496,7 @@ def test_two_libs(load_mode: str) -> None:
         Whether the C++ library should be loaded globally or locally.
 
     """
-    root = DIR / f"two_libs_{load_mode.lower()}"
+    root = test_dir("two_libs", load_mode)
     foo_library_name, foo_cpp_package_name, foo_python_package_name = names("foo")
     make_cpp_pkg(
         root, foo_cpp_package_name, foo_library_name, load_mode, square_as_cube=False
@@ -477,6 +508,7 @@ def test_two_libs(load_mode: str) -> None:
         foo_cpp_package_name,
         ["native_lib_loader", "libfoo"],
         ["scikit-build-core", "libfoo"],
+        load_dynamic_lib=True,
     )
 
     bar_library_name, bar_cpp_package_name, bar_python_package_name = names("bar")
@@ -490,6 +522,7 @@ def test_two_libs(load_mode: str) -> None:
         bar_cpp_package_name,
         ["native_lib_loader", "libbar"],
         ["scikit-build-core", "libbar"],
+        load_dynamic_lib=True,
     )
 
     env = VEnv(root)
@@ -518,7 +551,7 @@ def test_lib_only_available_at_build() -> None:
 
     In this case we expect to see runtime failures in the form of loader errors.
     """
-    root = DIR / "lib_only_available_at_build"
+    root = test_dir("lib_only_available_at_build")
     library_name, cpp_package_name, python_package_name = names("example")
     make_cpp_lib(root, library_name)
     make_python_pkg(
@@ -528,6 +561,7 @@ def test_lib_only_available_at_build() -> None:
         cpp_package_name,
         ["native_lib_loader"],
         ["scikit-build-core"],
+        load_dynamic_lib=True,
     )
 
     build_cmake_project(root / "cpp")
