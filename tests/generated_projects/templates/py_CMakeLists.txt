@@ -16,4 +16,10 @@ find_package(
 python_add_library({{ package_name }} MODULE {{ package_name }}/pylibexample.c WITH_SOABI)
 target_link_libraries({{ package_name }} PRIVATE {{ library_name }}::{{ library_name }})
 
+{% if set_rpath %}
+set_property(TARGET {{ package_name }} PROPERTY INSTALL_RPATH
+  "$ORIGIN/../{{ cpp_package_name }}/lib"
+)
+{% endif %}
+
 install(TARGETS {{ package_name }} DESTINATION {{ package_name }})

@@ -174,18 +174,19 @@ class VEnv:
                 raise
 
 
-def test_dir(base_name: str, *args: str) -> Path:
+def test_dir(base_name: str, **kwargs: str) -> Path:
     """Generate a test directory path based on the test case name.
 
     Parameters
     ----------
     base_name : str
         The base name for the test case.
-    *args
-        Additional strings to include in the test directory name.
+    **kwargs
+        Key-value pairs to include in the test directory name.
 
     """
-    return DIR / f"{base_name}_{'_'.join(arg.lower() for arg in args)}"
+    join_args = "__".join(f"{k.lower()}_{v.lower()}" for k, v in kwargs.items())
+    return DIR / f"{base_name}__{join_args}"
 
 
 @lru_cache
@@ -330,10 +331,11 @@ def make_python_pkg(  # noqa: PLR0913
     package_name: str,
     library_name: str,
     cpp_package_name: str,
+    *,
     dependencies: list | None = None,
     build_dependencies: list | None = None,
-    *,
     load_dynamic_lib: bool = True,
+    set_rpath: bool = False,
 ) -> None:
     """Generate a Python package with a native library dependency.
 
@@ -353,6 +355,8 @@ def make_python_pkg(  # noqa: PLR0913
         The build dependencies for the package.
     load_dynamic_lib : bool, optional
         Whether to load the dynamic library.
+    set_rpath : bool, optional
+        Whether to set the rpath for the Python extension module.
 
     """
     root = Path(root)
@@ -383,6 +387,9 @@ def make_python_pkg(  # noqa: PLR0913
             "package_name": package_name,
             "dependencies": dependencies,
             "build_dependencies": build_dependencies,
+            # cpp_package_name is only used if setting rpath
+            "set_rpath": set_rpath,
+            "cpp_package_name": cpp_package_name,
         },
     )
     generate_from_template(
@@ -446,7 +453,9 @@ def names(base_name: str) -> tuple[str, str, str]:
 #############################################
 # Test cases
 #############################################
-def test_basic(load_mode: str) -> None:
+def test_basic(
+    *, load_mode: str = "GLOBAL", load_dynamic_lib: bool = True, set_rpath: bool = False
+) -> None:
     """Test the generation of a basic library with a C++ and Python package.
 
     In this case everything is largely expected to work. It's a single library with a
@@ -456,9 +465,18 @@ def test_basic(load_mode: str) -> None:
     ----------
     load_mode : str
         Whether the C++ library should be loaded globally or locally.
+    load_dynamic_lib : bool
+        Whether the Python package should dynamically load the native library.
+    set_rpath : bool
+        Whether the Python extension module should set the rpath.
 
     """
-    root = test_dir("basic_lib", load_mode)
+    root = test_dir(
+        "basic_lib",
+        load_mode=load_mode,
+        load_dynamic_lib=str(load_dynamic_lib),
+        set_rpath=str(set_rpath),
+    )
     library_name, cpp_package_name, python_package_name = names("example")
     make_cpp_pkg(root, cpp_package_name, library_name, load_mode, square_as_cube=False)
     make_python_pkg(
@@ -466,9 +484,10 @@ def test_basic(load_mode: str) -> None:
         python_package_name,
         library_name,
         cpp_package_name,
-        ["native_lib_loader", "libexample"],
-        ["scikit-build-core", "libexample"],
-        load_dynamic_lib=True,
+        dependencies=["native_lib_loader", "libexample"],
+        build_dependencies=["scikit-build-core", "libexample"],
+        load_dynamic_lib=load_dynamic_lib,
+        set_rpath=set_rpath,
     )
 
     env = VEnv(root)
@@ -484,7 +503,9 @@ def test_basic(load_mode: str) -> None:
     )
 
 
-def test_two_libs(load_mode: str) -> None:
+def test_two_libs(
+    *, load_mode: str = "GLOBAL", load_dynamic_lib: bool = True, set_rpath: bool = False
+) -> None:
     """Test the generation of a basic library with a C++ and Python package.
 
     In this case everything is largely expected to work. It's a single library with a
@@ -494,9 +515,18 @@ def test_two_libs(load_mode: str) -> None:
     ----------
     load_mode : str
         Whether the C++ library should be loaded globally or locally.
+    load_dynamic_lib : bool
+        Whether the Python package should dynamically load the native library.
+    set_rpath : bool
+        Whether the Python extension module should set the rpath.
 
     """
-    root = test_dir("two_libs", load_mode)
+    root = test_dir(
+        "two_libs",
+        load_mode=load_mode,
+        load_dynamic_lib=str(load_dynamic_lib),
+        set_rpath=str(set_rpath),
+    )
     foo_library_name, foo_cpp_package_name, foo_python_package_name = names("foo")
     make_cpp_pkg(
         root, foo_cpp_package_name, foo_library_name, load_mode, square_as_cube=False
@@ -506,9 +536,10 @@ def test_two_libs(load_mode: str) -> None:
         foo_python_package_name,
         foo_library_name,
         foo_cpp_package_name,
-        ["native_lib_loader", "libfoo"],
-        ["scikit-build-core", "libfoo"],
-        load_dynamic_lib=True,
+        dependencies=["native_lib_loader", "libfoo"],
+        build_dependencies=["scikit-build-core", "libfoo"],
+        load_dynamic_lib=load_dynamic_lib,
+        set_rpath=set_rpath,
     )
 
     bar_library_name, bar_cpp_package_name, bar_python_package_name = names("bar")
@@ -520,9 +551,10 @@ def test_two_libs(load_mode: str) -> None:
         bar_python_package_name,
         bar_library_name,
         bar_cpp_package_name,
-        ["native_lib_loader", "libbar"],
-        ["scikit-build-core", "libbar"],
-        load_dynamic_lib=True,
+        dependencies=["native_lib_loader", "libbar"],
+        build_dependencies=["scikit-build-core", "libbar"],
+        load_dynamic_lib=load_dynamic_lib,
+        set_rpath=set_rpath,
     )
 
     env = VEnv(root)
@@ -549,7 +581,8 @@ def test_two_libs(load_mode: str) -> None:
 def test_lib_only_available_at_build() -> None:
     """Test the behavior when a library is only available at build time.
 
-    In this case we expect to see runtime failures in the form of loader errors.
+    In this case we expect to see runtime failures in the form of loader errors (which
+    should be caught by the native_lib_loader).
     """
     root = test_dir("lib_only_available_at_build")
     library_name, cpp_package_name, python_package_name = names("example")
@@ -559,8 +592,8 @@ def test_lib_only_available_at_build() -> None:
         python_package_name,
         library_name,
         cpp_package_name,
-        ["native_lib_loader"],
-        ["scikit-build-core"],
+        dependencies=["native_lib_loader"],
+        build_dependencies=["scikit-build-core"],
         load_dynamic_lib=True,
     )
 
@@ -583,13 +616,16 @@ def test_lib_only_available_at_build() -> None:
 
 
 if __name__ == "__main__":
-    test_basic("LOCAL")
-    test_basic("GLOBAL")
+    test_basic(load_mode="LOCAL")
+    test_basic(load_mode="GLOBAL")
     test_lib_only_available_at_build()
-    test_two_libs("LOCAL")
+    test_two_libs(load_mode="LOCAL")
     try:
         # Global loads should fail due to symbol conflicts
-        test_two_libs("GLOBAL")
+        test_two_libs(load_mode="GLOBAL")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
         assert "AssertionError" in stderr
+
+    test_basic(load_mode="LOCAL", load_dynamic_lib=False, set_rpath=True)
+    test_basic(load_mode="GLOBAL", load_dynamic_lib=False, set_rpath=True)
