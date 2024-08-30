@@ -160,18 +160,9 @@ class VEnv:
             f.write(textwrap.dedent(code))
             f.flush()
             script = f.name
-            try:
-                return subprocess.run(
-                    [self.executable, script], capture_output=True, check=True
-                )
-            except subprocess.CalledProcessError as e:
-                print("Error running script:")  # noqa: T201
-                print("stdout:")  # noqa: T201
-                print(e.stdout.decode())  # noqa: T201
-                print()  # noqa: T201
-                print("stderr:")  # noqa: T201
-                print(e.stderr.decode())  # noqa: T201
-                raise
+            return subprocess.run(
+                [self.executable, script], capture_output=True, check=True
+            )
 
 
 def test_dir(base_name: str, **kwargs: str) -> Path:
