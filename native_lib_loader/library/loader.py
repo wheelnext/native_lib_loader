@@ -1,6 +1,7 @@
 """The implementation of loading for packages that contain a reusable native library."""
 
 import ctypes
+import os
 from enum import Enum, auto
 from os import PathLike
 from pathlib import Path
@@ -11,6 +12,7 @@ class LoadMode(Enum):
 
     LOCAL = auto()
     GLOBAL = auto()
+    ENV = auto()
 
 
 class LoadOrder(Enum):
@@ -48,20 +50,25 @@ class LibraryLoader:
     ):
         self._path = path_to_local_lib
         self._lib = lib_name
-        self._mode = (
-            ctypes.RTLD_GLOBAL if mode == LoadMode.GLOBAL else ctypes.RTLD_LOCAL
-        )
+        self._mode = mode
         self._order = order
 
-    def load(self) -> ctypes.CDLL:
+    def load(self) -> None:
         """Load the native library and return the ctypes.CDLL object."""
-        if self._order == LoadOrder.ALLOW_SYSTEM:
-            try:
-                return ctypes.CDLL(self._lib, self._mode)
-            except OSError:
-                pass
-
-        return ctypes.CDLL(
-            str(Path(self._path) / self._lib),
-            mode=self._mode,
-        )
+        if self._mode == LoadMode.ENV:
+            # Set up env and return.
+            os.environ["LD_LIBRARY_PATH"] = str(Path(self._path))
+        else:
+            mode = (
+                ctypes.RTLD_GLOBAL
+                if self._mode == LoadMode.GLOBAL
+                else ctypes.RTLD_LOCAL
+            )
+            if self._order == LoadOrder.ALLOW_SYSTEM:
+                try:
+                    ctypes.CDLL(self._lib, mode)
+                except OSError:
+                    ctypes.CDLL(
+                        str(Path(self._path) / self._lib),
+                        mode=mode,
+                    )
