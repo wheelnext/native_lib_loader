@@ -21,3 +21,4 @@ cmake.minimum-version = "3.26.4"
 ninja.make-fallback = true
 wheel.packages = ["{{ package_name }}"]
 sdist.exclude = ["pylibexample.c"]
+editable.mode = "inplace"

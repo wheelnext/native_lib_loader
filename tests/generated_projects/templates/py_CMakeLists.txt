@@ -22,4 +22,9 @@ set_property(TARGET {{ package_name }} PROPERTY INSTALL_RPATH
 )
 {% endif %}
 
+if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}" AND DEFINED SKBUILD)
+  set_target_properties(
+    {{ package_name }} PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+                       "${CMAKE_BINARY_DIR}/{{ package_name }}$<0:>")
+endif()
 install(TARGETS {{ package_name }} DESTINATION {{ package_name }})

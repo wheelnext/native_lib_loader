@@ -85,7 +85,7 @@ class VEnv:
         self.wheel(native_lib_loader_dir.name)
 
     def install(
-        self, package_name: str, *args: str, editable: bool = False
+        self, package_name: Path | str, *args: str, editable: bool = False
     ) -> subprocess.CompletedProcess:
         """Install a package into the virtual environment with `pip install`.
 
@@ -186,7 +186,9 @@ def test_dir(base_name: str, **kwargs: str) -> Path:
 
     """
     join_args = "__".join(f"{k.lower()}_{v.lower()}" for k, v in kwargs.items())
-    return DIR / f"{base_name}__{join_args}"
+    if join_args:
+        join_args = f"__{join_args}"
+    return DIR / f"{base_name}{join_args}"
 
 
 @lru_cache
@@ -454,7 +456,11 @@ def names(base_name: str) -> tuple[str, str, str]:
 # Test cases
 #############################################
 def test_basic(
-    *, load_mode: str = "GLOBAL", load_dynamic_lib: bool = True, set_rpath: bool = False
+    *,
+    load_mode: str = "GLOBAL",
+    load_dynamic_lib: bool = True,
+    set_rpath: bool = False,
+    python_editable: bool = False,
 ) -> None:
     """Test the generation of a basic library with a C++ and Python package.
 
@@ -469,6 +475,8 @@ def test_basic(
         Whether the Python package should dynamically load the native library.
     set_rpath : bool
         Whether the Python extension module should set the rpath.
+    python_editable : bool
+        Whether to install the Python package in editable mode.
 
     """
     root = test_dir(
@@ -476,6 +484,7 @@ def test_basic(
         load_mode=load_mode,
         load_dynamic_lib=str(load_dynamic_lib),
         set_rpath=str(set_rpath),
+        python_editable=str(python_editable),
     )
     library_name, cpp_package_name, python_package_name = names("example")
     make_cpp_pkg(root, cpp_package_name, library_name, load_mode, square_as_cube=False)
@@ -492,8 +501,11 @@ def test_basic(
 
     env = VEnv(root)
     env.wheel(root / cpp_package_name)
-    env.wheel(root / python_package_name)
-    env.install(python_package_name, "--no-index")
+    if python_editable:
+        env.install(root / python_package_name, editable=python_editable)
+    else:
+        env.wheel(root / python_package_name)
+        env.install(python_package_name, "--no-index", editable=python_editable)
     env.run(
         """
         import pylibexample
@@ -627,5 +639,20 @@ if __name__ == "__main__":
         stderr = e.stderr.decode()
         assert "AssertionError" in stderr
 
+    # Verify that RPATH works under normal circumstances.
     test_basic(load_mode="LOCAL", load_dynamic_lib=False, set_rpath=True)
     test_basic(load_mode="GLOBAL", load_dynamic_lib=False, set_rpath=True)
+
+    # Show that dynamic loading works for editable installs (this uses skbc's inplace
+    # editable mode to demonstrate), but RPATH does not.
+    test_basic(load_mode="LOCAL", python_editable=True)
+    try:
+        test_basic(
+            load_mode="LOCAL",
+            load_dynamic_lib=False,
+            set_rpath=True,
+            python_editable=True,
+        )
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode()
+        assert "ImportError: " in stderr
