@@ -282,7 +282,7 @@ def make_cpp_pkg(
     library_name : str
         The name of the library.
     load_mode : str
-        Whether the C++ library should be loaded globally or locally.
+        The load mode used by the native_lib_loader.
     square_as_cube : bool, optional
         Whether to implement the square function as a cube function.
 
@@ -307,7 +307,7 @@ def make_cpp_pkg(
     )
     generate_from_template(lib_dir / "__init__.py", "cpp___init__.py")
 
-    if load_mode not in ("LOCAL", "GLOBAL"):
+    if load_mode not in ("LOCAL", "GLOBAL", "ENV"):
         msg = f"Invalid load mode: {load_mode}"
         raise ValueError(msg)
     generate_from_template(
@@ -461,7 +461,7 @@ def test_basic(
     Parameters
     ----------
     load_mode : str
-        Whether the C++ library should be loaded globally or locally.
+        The load mode used by the native_lib_loader.
     load_dynamic_lib : bool
         Whether the Python package should dynamically load the native library.
     set_rpath : bool
@@ -517,7 +517,7 @@ def test_two_libs(
     Parameters
     ----------
     load_mode : str
-        Whether the C++ library should be loaded globally or locally.
+        The load mode used by the native_lib_loader.
     load_dynamic_lib : bool
         Whether the Python package should dynamically load the native library.
     set_rpath : bool
@@ -644,6 +644,13 @@ if __name__ == "__main__":
             set_rpath=True,
             python_editable=True,
         )
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode()
+        assert "ImportError: " in stderr
+
+    # Show that setting LD_LIBRARY_PATH doesn't work
+    try:
+        test_basic(load_mode="ENV")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
         assert "ImportError: " in stderr
