@@ -2,3 +2,5 @@ build
 *.egg-info
 env
 *.swp
+tests/generated_projects/generated
+*.whl

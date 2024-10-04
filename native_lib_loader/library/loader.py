@@ -2,6 +2,7 @@
 
 import ctypes
 import os
+import platform
 from enum import Enum, auto
 from os import PathLike
 from pathlib import Path
@@ -52,12 +53,28 @@ class LibraryLoader:
         self._lib = lib_name
         self._mode = mode
         self._order = order
+        self._ext = (
+            "dll"
+            if platform.system() == "Windows"
+            else "dylib"
+            if platform.system() == "Darwin"
+            else "so"
+        )
+        self._prefix = "" if platform.system() == "Windows" else "lib"
+        self._full_lib_name = f"{self._prefix}{self._lib}.{self._ext}"
 
     def load(self) -> None:
         """Load the native library and return the ctypes.CDLL object."""
         if self._mode == LoadMode.ENV:
             # Set up env and return.
-            os.environ["LD_LIBRARY_PATH"] = str(Path(self._path))
+            env_var = (
+                "LD_LIBRARY_PATH"
+                if platform.system() == "Linux"
+                else "DYLD_LIBRARY_PATH"
+                if platform.system() == "Darwin"
+                else "PATH"
+            )
+            os.environ[env_var] = str(Path(self._path))
         else:
             mode = (
                 ctypes.RTLD_GLOBAL

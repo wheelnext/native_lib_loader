@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -40,7 +43,11 @@ class VEnv:
         self.wheelhouse = str(root / "wheelhouse")
         self.cache_dir = str(root / "cache")
 
-        self.executable = str(Path(self.env_dir) / "bin" / "python")
+        self.executable = (
+            str(Path(self.env_dir) / "bin" / "python")
+            if platform.system() != "Windows"
+            else str(Path(self.env_dir) / "Scripts" / "python.exe")
+        )
         # Allow for rerunning the script on preexisting test directories for local
         # debugging and interactive exploration.
         if not Path(self.executable).exists():
@@ -156,13 +163,23 @@ class VEnv:
             The Python code to run.
 
         """
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py") as f:
-            f.write(textwrap.dedent(code))
-            f.flush()
-            script = f.name
+        # To support Windows (prior to 3.12 when the delete_on_close parameter
+        # exists) we have to manually delete the temporary file because when
+        # delete=True the file cannot be reopened without following special
+        # rules that we cannot control when simply executing it directly via
+        # Python in the subprocess (we could with a suitable os.open call, but
+        # that's not relevant here). See
+        # https://docs.python.org/3/library/tempfile.html#tempfile.NamedTemporaryFile
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
+        f.write(textwrap.dedent(code))
+        f.flush()
+        f.close()
+        try:
             return subprocess.run(
-                [self.executable, script], capture_output=True, check=True
+                [self.executable, f.name], capture_output=True, check=True
             )
+        finally:
+            Path(f.name).unlink()
 
 
 def test_dir(base_name: str, **kwargs: str) -> Path:
@@ -176,10 +193,14 @@ def test_dir(base_name: str, **kwargs: str) -> Path:
         Key-value pairs to include in the test directory name.
 
     """
-    join_args = "__".join(f"{k.lower()}_{v.lower()}" for k, v in kwargs.items())
-    if join_args:
-        join_args = f"__{join_args}"
-    return DIR / f"{base_name}{join_args}"
+    kwargs["test_name"] = base_name
+    hasher = hashlib.sha1()
+    hasher.update(json.dumps(kwargs, sort_keys=True).encode())
+    dirname = DIR / "generated" / hasher.hexdigest()
+    Path(dirname).mkdir(parents=True)
+    with Path(dirname / "parameters.json").open(mode="w") as f:
+        json.dump(kwargs, f, sort_keys=True)
+    return dirname
 
 
 @lru_cache
@@ -407,25 +428,50 @@ def make_python_pkg(  # noqa: PLR0913
     )
 
 
-def build_cmake_project(root: PathLike | str) -> None:
+def build_cmake_project(root: PathLike | str, *, install: bool = False) -> None:
     """Build a CMake project.
 
     Parameters
     ----------
     root : PathLike or str
         The root directory for the project.
+    install: bool
+        Whether or not to install the project.
 
     """
     root = Path(root)
 
     subprocess.run(
-        ["cmake", "-S", root, "-B", root / "build"],
+        [
+            "cmake",
+            "-S",
+            root,
+            "-B",
+            root / "build",
+            "--install-prefix",
+            root / "install",
+        ],
         check=True,
     )
+    build_args = ["cmake", "--build", str(root / "build")]
+
+    # Handle multi-config generator on Windows (assuming we aren't using
+    # multi-config Ninja on Linux).
+    if platform.system() == "Windows":
+        # TODO: Specifying Debug instead of Release causes this to break. Not
+        # sure if that is a CMake bug or what, but can be investigated later.
+        build_args += ["--config", "Release"]
+
     subprocess.run(
-        ["cmake", "--build", root / "build"],
+        build_args,
         check=True,
     )
+
+    if install:
+        subprocess.run(
+            ["cmake", "--install", root / "build"],
+            check=True,
+        )
 
 
 def names(base_name: str) -> tuple[str, str, str]:
@@ -600,13 +646,17 @@ def test_lib_only_available_at_build() -> None:
         load_dynamic_lib=True,
     )
 
-    build_cmake_project(root / "cpp")
+    # This is for testing behavior on Windows where the build directory does
+    # not seem to be working as expected when found.
+    use_cpp_from_build = False
+
+    build_cmake_project(root / "cpp", install=not use_cpp_from_build)
 
     env = VEnv(root)
     env.wheel(
         root / python_package_name,
         "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH="
-        + str(root / "cpp" / "build"),
+        + str(root / "cpp" / ("build" if use_cpp_from_build else "install")),
     )
     env.install(python_package_name, "--no-index")
 
@@ -615,7 +665,15 @@ def test_lib_only_available_at_build() -> None:
         env.run(f"import {python_package_name}")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
-        assert f"ImportError: lib{library_name}.so" in stderr
+        err_msg = (
+            f"ImportError: lib{library_name}.so"
+            if platform.system() == "Linux"
+            else "DLL load failed"
+            if platform.system() == "Windows"
+            else f"ImportError: lib{library_name}.dylib"  # Darwin
+        )
+
+        assert err_msg in stderr
 
 
 if __name__ == "__main__":
@@ -631,24 +689,26 @@ if __name__ == "__main__":
         assert "AssertionError" in stderr
 
     # Verify that RPATH works under normal circumstances.
-    test_basic(load_mode="LOCAL", load_dynamic_lib=False, set_rpath=True)
-    test_basic(load_mode="GLOBAL", load_dynamic_lib=False, set_rpath=True)
+    if platform.system() == "Linux":
+        test_basic(load_mode="LOCAL", load_dynamic_lib=False, set_rpath=True)
+        test_basic(load_mode="GLOBAL", load_dynamic_lib=False, set_rpath=True)
 
     # Show that dynamic loading works for editable installs (this uses skbc's inplace
     # editable mode to demonstrate), but RPATH does not.
     test_basic(load_mode="LOCAL", python_editable=True)
-    try:
-        test_basic(
-            load_mode="LOCAL",
-            load_dynamic_lib=False,
-            set_rpath=True,
-            python_editable=True,
-        )
-    except subprocess.CalledProcessError as e:
-        stderr = e.stderr.decode()
-        assert "ImportError: " in stderr
+    if platform.system() == "Linux":
+        try:
+            test_basic(
+                load_mode="LOCAL",
+                load_dynamic_lib=False,
+                set_rpath=True,
+                python_editable=True,
+            )
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr.decode()
+            assert "ImportError: " in stderr
 
-    # Show that setting LD_LIBRARY_PATH doesn't work
+    # Show that setting LD_LIBRARY_PATH/DYLD_LIBRARY_PATH/PATH doesn't work
     try:
         test_basic(load_mode="ENV")
     except subprocess.CalledProcessError as e:
