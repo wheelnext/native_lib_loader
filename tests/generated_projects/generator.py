@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import platform
@@ -197,7 +198,7 @@ def test_dir(base_name: str, **kwargs: str) -> Path:
     hasher = hashlib.sha1()
     hasher.update(json.dumps(kwargs, sort_keys=True).encode())
     dirname = DIR / "generated" / hasher.hexdigest()
-    Path(dirname).mkdir(parents=True)
+    Path(dirname).mkdir(parents=True, exist_ok=True)
     with Path(dirname / "parameters.json").open(mode="w") as f:
         json.dump(kwargs, f, sort_keys=True)
     return dirname
@@ -350,6 +351,7 @@ def make_python_pkg(  # noqa: PLR0913
     build_dependencies: list | None = None,
     load_dynamic_lib: bool = True,
     set_rpath: bool = False,
+    windows_unresolved_symbols: bool = False,
 ) -> None:
     """Generate a Python package with a native library dependency.
 
@@ -371,6 +373,9 @@ def make_python_pkg(  # noqa: PLR0913
         Whether to load the dynamic library.
     set_rpath : bool, optional
         Whether to set the rpath for the Python extension module.
+    windows_unresolved_symbols: bool, optional
+        Whether to avoid linking to the C++ library on the link line to test
+        unresolved symbol resolution on Windows.
 
     """
     root = Path(root)
@@ -404,6 +409,7 @@ def make_python_pkg(  # noqa: PLR0913
             # cpp_package_name is only used if setting rpath
             "set_rpath": set_rpath,
             "cpp_package_name": cpp_package_name,
+            "windows_unresolved_symbols": windows_unresolved_symbols,
         },
     )
     generate_from_template(
@@ -498,6 +504,7 @@ def test_basic(
     load_dynamic_lib: bool = True,
     set_rpath: bool = False,
     python_editable: bool = False,
+    windows_unresolved_symbols: bool = False,
 ) -> None:
     """Test the generation of a basic library with a C++ and Python package.
 
@@ -514,6 +521,9 @@ def test_basic(
         Whether the Python extension module should set the rpath.
     python_editable : bool
         Whether to install the Python package in editable mode.
+    windows_unresolved_symbols: bool, optional
+        Whether to avoid linking to the C++ library on the link line to test
+        unresolved symbol resolution on Windows.
 
     """
     root = test_dir(
@@ -522,6 +532,7 @@ def test_basic(
         load_dynamic_lib=str(load_dynamic_lib),
         set_rpath=str(set_rpath),
         python_editable=str(python_editable),
+        windows_unresolved_symbols=str(windows_unresolved_symbols),
     )
     library_name, cpp_package_name, python_package_name = names("example")
     make_cpp_pkg(root, cpp_package_name, library_name, load_mode, square_as_cube=False)
@@ -534,6 +545,7 @@ def test_basic(
         build_dependencies=["scikit-build-core", "libexample"],
         load_dynamic_lib=load_dynamic_lib,
         set_rpath=set_rpath,
+        windows_unresolved_symbols=windows_unresolved_symbols,
     )
 
     env = VEnv(root)
@@ -677,6 +689,7 @@ def test_lib_only_available_at_build() -> None:
 
 
 if __name__ == "__main__":
+    # Note that the load mode does not affect Windows
     test_basic(load_mode="LOCAL")
     test_basic(load_mode="GLOBAL")
     test_lib_only_available_at_build()
@@ -714,3 +727,14 @@ if __name__ == "__main__":
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
         assert "ImportError: " in stderr
+
+    # Demonstrate unresolved symbols on Windows
+    if platform.system() == "Windows":
+        # Failure is expected, but the failure in this case is basically UB
+        # so we can't predict what the error code will be. Most likely the
+        # code is seg faulting.
+        with contextlib.suppress(subprocess.CalledProcessError):
+            test_basic(load_mode="LOCAL", windows_unresolved_symbols=True)
+        # Load mode should be irrelevant on Windows, but testing to verify.
+        with contextlib.suppress(subprocess.CalledProcessError):
+            test_basic(load_mode="GLOBAL", windows_unresolved_symbols=True)
