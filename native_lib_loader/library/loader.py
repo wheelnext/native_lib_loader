@@ -83,9 +83,9 @@ class LibraryLoader:
             )
             if self._order == LoadOrder.ALLOW_SYSTEM:
                 try:
-                    ctypes.CDLL(self._lib, mode)
+                    ctypes.CDLL(self._full_lib_name, mode)
                 except OSError:
                     ctypes.CDLL(
-                        str(Path(self._path) / self._lib),
+                        str(Path(self._path) / self._full_lib_name),
                         mode=mode,
                     )
