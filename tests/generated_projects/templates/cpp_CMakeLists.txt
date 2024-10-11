@@ -5,6 +5,11 @@ project({{ library_name }} VERSION 0.0.1 LANGUAGES C)
 # For simplicity in testing, always export symbols on Windows
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
+# Set the install name to something clearly nonexistent to ensure that we are
+# not simply getting lucky and loading it from a valid RPATH etc.
+set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
+set(CMAKE_INSTALL_NAME_DIR "fakepath")
+
 add_library({{ library_name }} SHARED example.c)
 target_include_directories({{ library_name }} PUBLIC "$<INSTALL_INTERFACE:include>" "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 
