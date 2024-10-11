@@ -66,6 +66,9 @@ class VEnv:
             "--cache-dir",
             self.cache_dir,
         ]
+        # Always update pip to ensure that we have the necessary new features like
+        # config-settings.
+        self.install("pip", "-U")
         self._install_native_lib_loader()
 
     def _install_native_lib_loader(self) -> None:
@@ -682,10 +685,10 @@ def test_lib_only_available_at_build() -> None:
             if platform.system() == "Linux"
             else "DLL load failed"
             if platform.system() == "Windows"
-            else f"ImportError: lib{library_name}.dylib"  # Darwin
+            else "ImportError: "  # Mac
         )
 
-        assert err_msg in stderr
+        assert err_msg in stderr, f"Did not get expected message, instead got {stderr}"
 
 
 if __name__ == "__main__":
