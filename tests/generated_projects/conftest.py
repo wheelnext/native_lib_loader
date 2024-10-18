@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,23 @@ COMMON_PIP_ARGS = (
     "--disable-pip-version-check",
     "--no-cache-dir",
 )
+
+ENV_ROOT = DIR / "generated"
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Set up the option for saving output files."""
+    parser.addoption(
+        "--keep", action="store_true", help="Whether or not to persist generated files."
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Configure whether or not to save the outputs for later inspection."""
+    if not config.getoption("--keep"):
+        global ENV_ROOT  # noqa: PLW0603
+        ENV_ROOT = Path(tempfile.mkdtemp())
+        config.add_cleanup(lambda: shutil.rmtree(ENV_ROOT))
 
 
 @pytest.fixture(scope="session")

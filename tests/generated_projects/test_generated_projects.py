@@ -7,6 +7,7 @@ import hashlib
 import json
 import platform
 import subprocess
+import sys
 import tempfile
 import textwrap
 import venv
@@ -20,8 +21,9 @@ from jinja2 import Environment, FileSystemLoader
 if TYPE_CHECKING:
     from os import PathLike
 
+from conftest import DIR, ENV_ROOT
 
-DIR = Path(__file__).parent
+sys.path.insert(0, str(DIR))
 
 
 class VEnv:
@@ -177,8 +179,8 @@ def dir_test(base_name: str, **kwargs: str) -> Path:
     kwargs["test_name"] = base_name
     hasher = hashlib.sha1()
     hasher.update(json.dumps(kwargs, sort_keys=True).encode())
-    dirname = DIR / "generated" / hasher.hexdigest()
-    Path(dirname).mkdir(parents=True, exist_ok=True)
+    dirname = ENV_ROOT / hasher.hexdigest()
+    dirname.mkdir(parents=True, exist_ok=True)
     with Path(dirname / "parameters.json").open(mode="w") as f:
         json.dump(kwargs, f, sort_keys=True)
     return dirname
