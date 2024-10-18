@@ -702,7 +702,9 @@ def test_two_libs(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
 
 
 # TODO: Make this test work on Mac too
-@pytest.mark.skipif(platform.system != "Linux", reason="RPATH only supported on Linux")
+@pytest.mark.skipif(
+    platform.system() != "Linux", reason="RPATH only supported on Linux"
+)
 def test_rpath(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
     """Verify that RPATH works under normal circumstances."""
     basic_test(
@@ -718,7 +720,9 @@ def test_editable_install(native_lib_loader_wheelhouse: Path) -> None:
     basic_test(native_lib_loader_wheelhouse, load_mode="LOCAL", python_editable=True)
 
 
-@pytest.mark.skipif(platform.system != "Linux", reason="RPATH only supported on Linux")
+@pytest.mark.skipif(
+    platform.system() != "Linux", reason="RPATH only supported on Linux"
+)
 def test_editable_install_with_rpath(native_lib_loader_wheelhouse: Path) -> None:
     """Show that RPATHs do not work for editable installs with incompatible layouts."""
     try:
@@ -744,7 +748,7 @@ def test_env_vars(native_lib_loader_wheelhouse: Path) -> None:
 
 
 @pytest.mark.skipif(
-    platform.system != "Windows", reason="This test is Windows-specific"
+    platform.system() != "Windows", reason="This test is Windows-specific"
 )
 def test_windows_unresolved_symbols(native_lib_loader_wheelhouse: Path) -> None:
     """Demonstrate unresolved symbols on Windows."""
