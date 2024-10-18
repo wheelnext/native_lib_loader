@@ -6,7 +6,6 @@ import contextlib
 import hashlib
 import json
 import platform
-import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -16,16 +15,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-import tomlkit
 from jinja2 import Environment, FileSystemLoader
-from packaging.version import parse as parse_version
 
 if TYPE_CHECKING:
     from os import PathLike
 
 
 DIR = Path(__file__).parent
-NATIVE_LIB_DIR = DIR.parent.parent
 
 
 class VEnv:
@@ -38,10 +34,11 @@ class VEnv:
 
     """
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, native_lib_loader_wheelhouse: Path):
         self.env_dir = root / "env"
         Path(self.env_dir).mkdir(exist_ok=True)
 
+        self.nll_wheelhouse = str(native_lib_loader_wheelhouse)
         self.wheelhouse = str(root / "wheelhouse")
         self.cache_dir = str(root / "cache")
 
@@ -70,31 +67,6 @@ class VEnv:
         # Always update pip to ensure that we have the necessary new features like
         # config-settings.
         self.install("pip", "-U")
-        self._install_native_lib_loader()
-
-    def _install_native_lib_loader(self) -> None:
-        # Build the native_lib_loader_dir wheel in a temporary directory where we can
-        # bump the version to ensure that it is preferred to any other available wheels.
-        native_lib_loader_dir = tempfile.TemporaryDirectory()
-
-        shutil.copytree(
-            NATIVE_LIB_DIR,
-            native_lib_loader_dir.name,
-            ignore=shutil.ignore_patterns("tests*", "build*", "dist*", "*.egg-info*"),
-            dirs_exist_ok=True,
-        )
-
-        pyproject_file = Path(native_lib_loader_dir.name) / "pyproject.toml"
-        with Path(pyproject_file).open() as f:
-            pyproject = tomlkit.load(f)
-        project_data = pyproject["project"]
-
-        version = parse_version(project_data["version"])
-        project_data["version"] = f"{version.major + 1}.{version.minor}.{version.micro}"
-        with Path(pyproject_file).open("w") as f:
-            tomlkit.dump(pyproject, f)
-
-        self.wheel(native_lib_loader_dir.name)
 
     def install(
         self, package_name: Path | str, *args: str, editable: bool = False
@@ -120,6 +92,8 @@ class VEnv:
                 *self._pip_cmd_base,
                 *(
                     "install",
+                    "--find-links",
+                    self.nll_wheelhouse,
                     "--find-links",
                     self.wheelhouse,
                     *args,
@@ -150,6 +124,8 @@ class VEnv:
                     "--no-deps",
                     "--wheel-dir",
                     self.wheelhouse,
+                    "--find-links",
+                    self.nll_wheelhouse,
                     "--find-links",
                     self.wheelhouse,
                     package_dir,
@@ -503,6 +479,7 @@ def names(base_name: str) -> tuple[str, str, str]:
 # Test cases
 #############################################
 def basic_test(
+    native_lib_loader_wheelhouse: Path,
     *,
     load_mode: str = "GLOBAL",
     load_dynamic_lib: bool = True,
@@ -517,6 +494,8 @@ def basic_test(
 
     Parameters
     ----------
+    native_lib_loader_wheelhouse : Path
+        The path to where the native_lib_loader wheel is.
     load_mode : str
         The load mode used by the native_lib_loader.
     load_dynamic_lib : bool
@@ -552,7 +531,7 @@ def basic_test(
         windows_unresolved_symbols=windows_unresolved_symbols,
     )
 
-    env = VEnv(root)
+    env = VEnv(root, native_lib_loader_wheelhouse)
     env.wheel(root / cpp_package_name)
     if python_editable:
         env.install(root / python_package_name, editable=python_editable)
@@ -569,7 +548,11 @@ def basic_test(
 
 
 def two_libs_test(
-    *, load_mode: str = "GLOBAL", load_dynamic_lib: bool = True, set_rpath: bool = False
+    native_lib_loader_wheelhouse: Path,
+    *,
+    load_mode: str = "GLOBAL",
+    load_dynamic_lib: bool = True,
+    set_rpath: bool = False,
 ) -> None:
     """Test using two libraries with symbol collisions.
 
@@ -577,6 +560,8 @@ def two_libs_test(
 
     Parameters
     ----------
+    native_lib_loader_wheelhouse : Path
+        The path to where the native_lib_loader wheel is.
     load_mode : str
         The load mode used by the native_lib_loader.
     load_dynamic_lib : bool
@@ -621,7 +606,7 @@ def two_libs_test(
         set_rpath=set_rpath,
     )
 
-    env = VEnv(root)
+    env = VEnv(root, native_lib_loader_wheelhouse)
     env.wheel(root / foo_cpp_package_name)
     env.wheel(root / foo_python_package_name)
     env.install(foo_python_package_name, "--no-index")
@@ -642,18 +627,12 @@ def two_libs_test(
     )
 
 
-@pytest.fixture(scope="module", params=("LOCAL", "GLOBAL"))
-def load_mode(request: pytest.FixtureRequest) -> str:
-    """Generate valid modes for opening a library."""
-    return request.param
-
-
-def test_basic(load_mode: str) -> None:
+def test_basic(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
     """Test a single Python extension loading an associated library."""
-    basic_test(load_mode=load_mode)
+    basic_test(native_lib_loader_wheelhouse, load_mode=load_mode)
 
 
-def test_lib_only_available_at_build_test() -> None:
+def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) -> None:
     """Test the behavior when a library is only available at build time.
 
     In this case we expect to see runtime failures in the form of loader errors (which
@@ -678,7 +657,7 @@ def test_lib_only_available_at_build_test() -> None:
 
     build_cmake_project(root / "cpp", install=not use_cpp_from_build)
 
-    env = VEnv(root)
+    env = VEnv(root, native_lib_loader_wheelhouse)
     env.wheel(
         root / python_package_name,
         "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH="
@@ -702,7 +681,7 @@ def test_lib_only_available_at_build_test() -> None:
         assert err_msg in stderr, f"Did not get expected message, instead got {stderr}"
 
 
-def test_two_libs(load_mode: str) -> None:
+def test_two_libs(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
     """Test using two libraries with symbol collisions.
 
     This test should work when loading locally, but global loads should collide.
@@ -710,7 +689,7 @@ def test_two_libs(load_mode: str) -> None:
     # Note that the load mode does not affect Windows
     try:
         # Global loads should fail due to symbol conflicts
-        two_libs_test(load_mode=load_mode)
+        two_libs_test(native_lib_loader_wheelhouse, load_mode=load_mode)
     except subprocess.CalledProcessError as e:
         # Failures are expected due to symbol collisions when loading globally.
         if load_mode == "GLOBAL":
@@ -722,21 +701,27 @@ def test_two_libs(load_mode: str) -> None:
 
 # TODO: Make this test work on Mac too
 @pytest.mark.skipif(platform.system != "Linux", reason="RPATH only supported on Linux")
-def test_rpath(load_mode: str) -> None:
+def test_rpath(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
     """Verify that RPATH works under normal circumstances."""
-    basic_test(load_mode=load_mode, load_dynamic_lib=False, set_rpath=True)
+    basic_test(
+        native_lib_loader_wheelhouse,
+        load_mode=load_mode,
+        load_dynamic_lib=False,
+        set_rpath=True,
+    )
 
 
-def test_editable_install() -> None:
+def test_editable_install(native_lib_loader_wheelhouse: Path) -> None:
     """Show that dynamic loading works for editable installs."""
-    basic_test(load_mode="LOCAL", python_editable=True)
+    basic_test(native_lib_loader_wheelhouse, load_mode="LOCAL", python_editable=True)
 
 
 @pytest.mark.skipif(platform.system != "Linux", reason="RPATH only supported on Linux")
-def test_editable_install_with_rpath() -> None:
+def test_editable_install_with_rpath(native_lib_loader_wheelhouse: Path) -> None:
     """Show that RPATHs do not work for editable installs with incompatible layouts."""
     try:
         basic_test(
+            native_lib_loader_wheelhouse,
             load_mode="LOCAL",
             load_dynamic_lib=False,
             set_rpath=True,
@@ -747,10 +732,10 @@ def test_editable_install_with_rpath() -> None:
         assert "ImportError: " in stderr
 
 
-def test_env_vars() -> None:
+def test_env_vars(native_lib_loader_wheelhouse: Path) -> None:
     """Show that setting LD_LIBRARY_PATH/DYLD_LIBRARY_PATH/PATH doesn't work."""
     try:
-        basic_test(load_mode="ENV")
+        basic_test(native_lib_loader_wheelhouse, load_mode="ENV")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
         assert "ImportError: " in stderr
@@ -759,13 +744,21 @@ def test_env_vars() -> None:
 @pytest.mark.skipif(
     platform.system != "Windows", reason="This test is Windows-specific"
 )
-def test_windows_unresolved_symbols() -> None:
+def test_windows_unresolved_symbols(native_lib_loader_wheelhouse: Path) -> None:
     """Demonstrate unresolved symbols on Windows."""
     # Failure is expected, but the failure in this case is basically UB
     # so we can't predict what the error code will be. Most likely the
     # code is seg faulting.
     with contextlib.suppress(subprocess.CalledProcessError):
-        basic_test(load_mode="LOCAL", windows_unresolved_symbols=True)
+        basic_test(
+            native_lib_loader_wheelhouse,
+            load_mode="LOCAL",
+            windows_unresolved_symbols=True,
+        )
     # Load mode should be irrelevant on Windows, but testing to verify.
     with contextlib.suppress(subprocess.CalledProcessError):
-        basic_test(load_mode="GLOBAL", windows_unresolved_symbols=True)
+        basic_test(
+            native_lib_loader_wheelhouse,
+            load_mode="GLOBAL",
+            windows_unresolved_symbols=True,
+        )
