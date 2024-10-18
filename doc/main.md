@@ -87,7 +87,7 @@ Ideally dynamic loaders would expose a programmatic interface to modify search p
 
 ### Setting RPATHs
 
-RPATHs appear to be a viable solution for generating portable binaries, but in the wheel case they assuredly are not. One obvious issue is platform availability: no analog exists on Windows. However, the problems are deeper than that. Since the first loaded module wins on all platforms, an extension module with RPATHs set could still wind up using the wrong version of a library if another extension module was loaded before it that triggered loading of the library from a different location.
+RPATHs appear to be a viable solution for generating portable binaries, but in the wheel case they assuredly are not. One obvious issue is platform availability: no analog exists on Windows. However, the problems are deeper than that. Since the first loaded module wins on all platforms, an extension module with RPATHs set could still wind up using the wrong version of a library if another extension module was loaded before it that triggered loading of the library from a different location. Another issue is that RPATHs are specific to a particular layout of packages that may not be satisfied. With the modern Python import system, between meta path hooks, PYTHONPATH, and other similar modifications there is no guarantee that any set of relative paths will be sufficient to cover all cases. This critique is less insurmountable than the first, since in principle we could simply decide that only a subset of layouts are supported, but it does make for a fairly unpalatable option of having a perpetually growing list of RPATHs.
 
 ### Allowing Undefined Symbols
 
