@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
 import tomlkit
 from jinja2 import Environment, FileSystemLoader
 from packaging.version import parse as parse_version
@@ -186,7 +187,7 @@ class VEnv:
             Path(f.name).unlink()
 
 
-def test_dir(base_name: str, **kwargs: str) -> Path:
+def dir_test(base_name: str, **kwargs: str) -> Path:
     """Generate a test directory path based on the test case name.
 
     Parameters
@@ -501,7 +502,7 @@ def names(base_name: str) -> tuple[str, str, str]:
 #############################################
 # Test cases
 #############################################
-def test_basic(
+def basic_test(
     *,
     load_mode: str = "GLOBAL",
     load_dynamic_lib: bool = True,
@@ -529,7 +530,7 @@ def test_basic(
         unresolved symbol resolution on Windows.
 
     """
-    root = test_dir(
+    root = dir_test(
         "basic_lib",
         load_mode=load_mode,
         load_dynamic_lib=str(load_dynamic_lib),
@@ -567,13 +568,12 @@ def test_basic(
     )
 
 
-def test_two_libs(
+def two_libs_test(
     *, load_mode: str = "GLOBAL", load_dynamic_lib: bool = True, set_rpath: bool = False
 ) -> None:
-    """Test the generation of a basic library with a C++ and Python package.
+    """Test using two libraries with symbol collisions.
 
-    In this case everything is largely expected to work. It's a single library with a
-    single function that is single-sourced.
+    This test should work when loading locally, but global loads should collide.
 
     Parameters
     ----------
@@ -585,7 +585,7 @@ def test_two_libs(
         Whether the Python extension module should set the rpath.
 
     """
-    root = test_dir(
+    root = dir_test(
         "two_libs",
         load_mode=load_mode,
         load_dynamic_lib=str(load_dynamic_lib),
@@ -642,13 +642,24 @@ def test_two_libs(
     )
 
 
-def test_lib_only_available_at_build() -> None:
+@pytest.fixture(scope="module", params=("LOCAL", "GLOBAL"))
+def load_mode(request: pytest.FixtureRequest) -> str:
+    """Generate valid modes for opening a library."""
+    return request.param
+
+
+def test_basic(load_mode: str) -> None:
+    """Test a single Python extension loading an associated library."""
+    basic_test(load_mode=load_mode)
+
+
+def test_lib_only_available_at_build_test() -> None:
     """Test the behavior when a library is only available at build time.
 
     In this case we expect to see runtime failures in the form of loader errors (which
     should be caught by the native_lib_loader).
     """
-    root = test_dir("lib_only_available_at_build")
+    root = dir_test("lib_only_available_at_build")
     library_name, cpp_package_name, python_package_name = names("example")
     make_cpp_lib(root, library_name)
     make_python_pkg(
@@ -691,53 +702,70 @@ def test_lib_only_available_at_build() -> None:
         assert err_msg in stderr, f"Did not get expected message, instead got {stderr}"
 
 
-if __name__ == "__main__":
+def test_two_libs(load_mode: str) -> None:
+    """Test using two libraries with symbol collisions.
+
+    This test should work when loading locally, but global loads should collide.
+    """
     # Note that the load mode does not affect Windows
-    test_basic(load_mode="LOCAL")
-    test_basic(load_mode="GLOBAL")
-    test_lib_only_available_at_build()
-    test_two_libs(load_mode="LOCAL")
     try:
         # Global loads should fail due to symbol conflicts
-        test_two_libs(load_mode="GLOBAL")
+        two_libs_test(load_mode=load_mode)
     except subprocess.CalledProcessError as e:
-        stderr = e.stderr.decode()
-        assert "AssertionError" in stderr
-
-    # Verify that RPATH works under normal circumstances.
-    if platform.system() == "Linux":
-        test_basic(load_mode="LOCAL", load_dynamic_lib=False, set_rpath=True)
-        test_basic(load_mode="GLOBAL", load_dynamic_lib=False, set_rpath=True)
-
-    # Show that dynamic loading works for editable installs (this uses skbc's inplace
-    # editable mode to demonstrate), but RPATH does not.
-    test_basic(load_mode="LOCAL", python_editable=True)
-    if platform.system() == "Linux":
-        try:
-            test_basic(
-                load_mode="LOCAL",
-                load_dynamic_lib=False,
-                set_rpath=True,
-                python_editable=True,
-            )
-        except subprocess.CalledProcessError as e:
+        # Failures are expected due to symbol collisions when loading globally.
+        if load_mode == "GLOBAL":
             stderr = e.stderr.decode()
-            assert "ImportError: " in stderr
+            assert "AssertionError" in stderr
+        else:
+            raise
 
-    # Show that setting LD_LIBRARY_PATH/DYLD_LIBRARY_PATH/PATH doesn't work
+
+# TODO: Make this test work on Mac too
+@pytest.mark.skipif(platform.system != "Linux", reason="RPATH only supported on Linux")
+def test_rpath(load_mode: str) -> None:
+    """Verify that RPATH works under normal circumstances."""
+    basic_test(load_mode=load_mode, load_dynamic_lib=False, set_rpath=True)
+
+
+def test_editable_install() -> None:
+    """Show that dynamic loading works for editable installs."""
+    basic_test(load_mode="LOCAL", python_editable=True)
+
+
+@pytest.mark.skipif(platform.system != "Linux", reason="RPATH only supported on Linux")
+def test_editable_install_with_rpath() -> None:
+    """Show that RPATHs do not work for editable installs with incompatible layouts."""
     try:
-        test_basic(load_mode="ENV")
+        basic_test(
+            load_mode="LOCAL",
+            load_dynamic_lib=False,
+            set_rpath=True,
+            python_editable=True,
+        )
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
         assert "ImportError: " in stderr
 
-    # Demonstrate unresolved symbols on Windows
-    if platform.system() == "Windows":
-        # Failure is expected, but the failure in this case is basically UB
-        # so we can't predict what the error code will be. Most likely the
-        # code is seg faulting.
-        with contextlib.suppress(subprocess.CalledProcessError):
-            test_basic(load_mode="LOCAL", windows_unresolved_symbols=True)
-        # Load mode should be irrelevant on Windows, but testing to verify.
-        with contextlib.suppress(subprocess.CalledProcessError):
-            test_basic(load_mode="GLOBAL", windows_unresolved_symbols=True)
+
+def test_env_vars() -> None:
+    """Show that setting LD_LIBRARY_PATH/DYLD_LIBRARY_PATH/PATH doesn't work."""
+    try:
+        basic_test(load_mode="ENV")
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode()
+        assert "ImportError: " in stderr
+
+
+@pytest.mark.skipif(
+    platform.system != "Windows", reason="This test is Windows-specific"
+)
+def test_windows_unresolved_symbols() -> None:
+    """Demonstrate unresolved symbols on Windows."""
+    # Failure is expected, but the failure in this case is basically UB
+    # so we can't predict what the error code will be. Most likely the
+    # code is seg faulting.
+    with contextlib.suppress(subprocess.CalledProcessError):
+        basic_test(load_mode="LOCAL", windows_unresolved_symbols=True)
+    # Load mode should be irrelevant on Windows, but testing to verify.
+    with contextlib.suppress(subprocess.CalledProcessError):
+        basic_test(load_mode="GLOBAL", windows_unresolved_symbols=True)
