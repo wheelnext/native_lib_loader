@@ -1,5 +1,6 @@
 """Common test helpers."""
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -34,6 +35,7 @@ def pytest_configure(config: pytest.Config) -> None:
     if not config.getoption("--keep"):
         global ENV_ROOT  # noqa: PLW0603
         ENV_ROOT = Path(tempfile.mkdtemp())
+        os.environ["NATIVE_LIB_LOADER_TESTING"] = "1"
         config.add_cleanup(lambda: shutil.rmtree(ENV_ROOT))
 
 
