@@ -40,6 +40,13 @@ class LibraryLoader:
         self._prefix = "" if platform.system() == "Windows" else "lib"
         self._full_lib_name = f"{self._prefix}{self._lib}.{self._ext}"
 
+    def _load_internal(self) -> None:
+        """Load the native library in the package."""
+        ctypes.CDLL(
+            str(Path(self._path) / self._full_lib_name),
+            mode=ctypes.RTLD_LOCAL,
+        )
+
     def load(self) -> None:
         """Load the native library and return the ctypes.CDLL object."""
         # Always load the library in local mode.
@@ -48,12 +55,6 @@ class LibraryLoader:
             try:
                 ctypes.CDLL(self._full_lib_name, mode)
             except OSError:
-                ctypes.CDLL(
-                    str(Path(self._path) / self._full_lib_name),
-                    mode=mode,
-                )
+                self._load_internal()
         else:
-            ctypes.CDLL(
-                str(Path(self._path) / self._full_lib_name),
-                mode=mode,
-            )
+            self._load_internal()
