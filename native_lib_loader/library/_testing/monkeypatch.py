@@ -34,10 +34,11 @@ class TestingLibraryLoader(library.LibraryLoader):
         self,
         path_to_local_lib: PathLike,
         lib_name: str,
-        order: library.LoadOrder = library.LoadOrder.ALLOW_SYSTEM,
+        *,
+        prefer_system: bool = False,
         mode: LoadMode = LoadMode.GLOBAL,
     ):
-        super().__init__(path_to_local_lib, lib_name, order)
+        super().__init__(path_to_local_lib, lib_name, prefer_system=prefer_system)
         self._mode = mode
 
     def load(self) -> None:

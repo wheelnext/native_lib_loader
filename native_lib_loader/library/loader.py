@@ -2,16 +2,8 @@
 
 import ctypes
 import platform
-from enum import Enum, auto
 from os import PathLike
 from pathlib import Path
-
-
-class LoadOrder(Enum):
-    """Order in which system vs. package-local libraries should be loaded."""
-
-    ALLOW_SYSTEM = auto()
-    REQUIRE_LOCAL = auto()
 
 
 class LibraryLoader:
@@ -23,7 +15,7 @@ class LibraryLoader:
         The path to the local library in the wheel.
     lib_name : str
         The name of the library to load
-    load_order : LoadOrder
+    prefer_system : bool
         Whether or not to try loading a system library before the local version.
 
     """
@@ -32,11 +24,12 @@ class LibraryLoader:
         self,
         path_to_local_lib: PathLike,
         lib_name: str,
-        order: LoadOrder = LoadOrder.ALLOW_SYSTEM,
+        *,
+        prefer_system: bool = False,
     ):
         self._path = path_to_local_lib
         self._lib = lib_name
-        self._order = order
+        self._prefer_system = prefer_system
         self._ext = (
             "dll"
             if platform.system() == "Windows"
@@ -51,7 +44,7 @@ class LibraryLoader:
         """Load the native library and return the ctypes.CDLL object."""
         # Always load the library in local mode.
         mode = ctypes.RTLD_LOCAL
-        if self._order == LoadOrder.ALLOW_SYSTEM:
+        if self._prefer_system:
             try:
                 ctypes.CDLL(self._full_lib_name, mode)
             except OSError:
