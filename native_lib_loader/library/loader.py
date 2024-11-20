@@ -1,6 +1,7 @@
 """The implementation of loading for packages that contain a reusable native library."""
 
 import ctypes
+import os
 import platform
 from os import PathLike
 from pathlib import Path
@@ -53,7 +54,9 @@ class LibraryLoader:
         """
         # Always load the library in local mode.
         mode = ctypes.RTLD_LOCAL
-        if prefer_system:
+        if prefer_system or os.getenv(
+            f"PREFER_{self._lib.upper()}_SYSTEM_LIBRARY", "false"
+        ).lower() not in ("false", 0):
             try:
                 ctypes.CDLL(self._full_lib_name, mode)
             except OSError:
