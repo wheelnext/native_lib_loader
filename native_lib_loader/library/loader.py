@@ -54,6 +54,6 @@ class LibraryLoader:
                 )
         else:
             ctypes.CDLL(
-                str(Path(self._path) / self._lib),
+                str(Path(self._path) / self._full_lib_name),
                 mode=mode,
             )
