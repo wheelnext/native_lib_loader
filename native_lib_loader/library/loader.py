@@ -46,8 +46,8 @@ class LibraryLoader:
         self,
         path_to_local_lib: PathLike,
         lib_name: str,
-        mode: LoadMode = LoadMode.GLOBAL,
         order: LoadOrder = LoadOrder.ALLOW_SYSTEM,
+        mode: LoadMode = LoadMode.GLOBAL,
     ):
         self._path = path_to_local_lib
         self._lib = lib_name
