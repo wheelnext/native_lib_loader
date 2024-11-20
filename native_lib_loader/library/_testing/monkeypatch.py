@@ -35,14 +35,20 @@ class TestingLibraryLoader(library.LibraryLoader):
         path_to_local_lib: PathLike,
         lib_name: str,
         *,
-        prefer_system: bool = False,
         mode: LoadMode = LoadMode.GLOBAL,
     ):
-        super().__init__(path_to_local_lib, lib_name, prefer_system=prefer_system)
+        super().__init__(path_to_local_lib, lib_name)
         self._mode = mode
 
-    def load(self) -> None:
-        """Load the native library and return the ctypes.CDLL object."""
+    def load(self, *, prefer_system: bool = False) -> None:
+        """Load the native library and return the ctypes.CDLL object.
+
+        Parameters
+        ----------
+        prefer_system : bool
+            Whether or not to try loading a system library before the local version.
+
+        """
         if self._mode == LoadMode.ENV:
             # Set up env and return.
             env_var = (
@@ -68,7 +74,7 @@ class TestingLibraryLoader(library.LibraryLoader):
 
             ctypes.CDLL = new_cdll  # type: ignore[misc,assignment]
             try:
-                super().load()
+                super().load(prefer_system=prefer_system)
             finally:
                 ctypes.CDLL = old_cdll  # type: ignore[misc]
 

@@ -15,8 +15,6 @@ class LibraryLoader:
         The path to the local library in the wheel.
     lib_name : str
         The name of the library to load
-    prefer_system : bool
-        Whether or not to try loading a system library before the local version.
 
     """
 
@@ -24,12 +22,9 @@ class LibraryLoader:
         self,
         path_to_local_lib: PathLike,
         lib_name: str,
-        *,
-        prefer_system: bool = False,
     ):
         self._path = path_to_local_lib
         self._lib = lib_name
-        self._prefer_system = prefer_system
         self._ext = (
             "dll"
             if platform.system() == "Windows"
@@ -47,11 +42,18 @@ class LibraryLoader:
             mode=ctypes.RTLD_LOCAL,
         )
 
-    def load(self) -> None:
-        """Load the native library and return the ctypes.CDLL object."""
+    def load(self, *, prefer_system: bool = False) -> None:
+        """Load the native library and return the ctypes.CDLL object.
+
+        Parameters
+        ----------
+        prefer_system : bool
+            Whether or not to try loading a system library before the local version.
+
+        """
         # Always load the library in local mode.
         mode = ctypes.RTLD_LOCAL
-        if self._prefer_system:
+        if prefer_system:
             try:
                 ctypes.CDLL(self._full_lib_name, mode)
             except OSError:
