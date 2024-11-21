@@ -549,7 +549,7 @@ def basic_test(
     )
 
 
-def two_libs_test(
+def two_colliding_packages_test(
     native_lib_loader_wheelhouse: Path,
     *,
     load_mode: str = "GLOBAL",
@@ -683,7 +683,9 @@ def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) ->
         assert err_msg in stderr, f"Did not get expected message, instead got {stderr}"
 
 
-def test_two_libs(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
+def test_two_colliding_packages(
+    load_mode: str, native_lib_loader_wheelhouse: Path
+) -> None:
     """Test using two libraries with symbol collisions.
 
     This test should work when loading locally, but global loads should collide.
@@ -691,7 +693,7 @@ def test_two_libs(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
     # Note that the load mode does not affect Windows
     try:
         # Global loads should fail due to symbol conflicts
-        two_libs_test(native_lib_loader_wheelhouse, load_mode=load_mode)
+        two_colliding_packages_test(native_lib_loader_wheelhouse, load_mode=load_mode)
     except subprocess.CalledProcessError as e:
         # Failures are expected due to symbol collisions when loading globally.
         if load_mode == "GLOBAL":
