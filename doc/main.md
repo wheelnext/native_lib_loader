@@ -251,3 +251,10 @@ An example of case 1 would be something like MPI where knowledge of the fabrics 
 An example of case 2 could be something like OpenMP where having multiple libraries loaded could lead to oversubscription of threads, or any library where objects have RTTI that is not safe to pass from one "version" of the library to another (e.g.
 any class with virtual methods; the vtables defined in one copy of the library may be incompatible when passed to the other).
 In such cases the tradeoff of not making fully isolated wheels may be worthwhile.
+
+### OS X and Mangling
+
+Note that with the scheme proposed here, the relevant mangling on OS X is of the install name.
+Due to the way that the linker places the install name into the `LC_LOAD_DYLIB` entries and the way those are used at runtime to load libraries, we need to ensure that the install name of the loaded library exactly matches the `LC_LOAD_DYLIB` entries in the consuming Mach-O file.
+The easiest way those could be made to match is by stripping out all path components from both and simply using the filename (e.g. `libexample.dylib`), but that would lead to potential collisions.
+Therefore, what is needed is to ensure that the install name is mangled so that it does not conflict with other installations of the same library.
