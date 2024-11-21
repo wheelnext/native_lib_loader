@@ -573,7 +573,7 @@ def two_colliding_packages_test(
 
     """
     root = dir_test(
-        "two_libs",
+        "two_colliding_packages",
         load_mode=load_mode,
         load_dynamic_lib=str(load_dynamic_lib),
         set_rpath=str(set_rpath),
