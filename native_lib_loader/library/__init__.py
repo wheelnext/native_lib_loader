@@ -1,9 +1,10 @@
 """The implementation of loading for packages that contain a reusable native library."""
 
-from .loader import LibraryLoader
+from .loader import LibraryLoader, PlatformLibrary
 
 __all__ = [
     "LibraryLoader",
+    "PlatformLibrary",
 ]
 
 # To support testing publicly unsupported behaviors of the loader, we replace the

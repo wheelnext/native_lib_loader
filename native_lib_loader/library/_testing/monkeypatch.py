@@ -5,14 +5,20 @@ intrinsically dangerous or simply nonfunctional. The primary purpose of this mod
 to enable testing of those approaches without exposing them via the public API.
 """
 
+from __future__ import annotations
+
 import ctypes
 import os
 import platform
 from enum import Enum, auto
 from os import PathLike
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from native_lib_loader import library
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
 
 
 class LoadMode(Enum):
@@ -32,19 +38,31 @@ class TestingLibraryLoader(library.LibraryLoader):
 
     def __init__(
         self,
-        path_to_local_lib: PathLike,
-        lib_name: str,
+        libraries: dict[
+            str,
+            library.PlatformLibrary
+            | tuple[PathLike | str, PathLike | str, PathLike | str],
+        ],
         *,
         mode: LoadMode = LoadMode.GLOBAL,
     ):
-        super().__init__(path_to_local_lib, lib_name)
+        super().__init__(libraries)
         self._mode = mode
 
-    def load(self, *, prefer_system: bool = False) -> None:
+    @staticmethod
+    def _load_global(library_path: Path | str) -> None:
+        """Load the library at the given path with RTLD_GLOBAL."""
+        ctypes.CDLL(str(library_path), mode=ctypes.RTLD_GLOBAL)
+
+    def load(
+        self, libraries: Iterable[str] | None = None, *, prefer_system: bool = False
+    ) -> None:
         """Load the native library and return the ctypes.CDLL object.
 
         Parameters
         ----------
+        libraries : Iterable[str] | None, optional
+            The names of the libraries to load. If None, all libraries are loaded.
         prefer_system : bool
             Whether or not to try loading a system library before the local version.
 
@@ -58,28 +76,25 @@ class TestingLibraryLoader(library.LibraryLoader):
                 if platform.system() == "Darwin"
                 else "PATH"
             )
-            os.environ[env_var] = str(Path(self._path))
-        else:
-            ctypes_mode = (
-                ctypes.RTLD_GLOBAL
-                if self._mode == LoadMode.GLOBAL
-                else ctypes.RTLD_LOCAL
+            sep = ";" if platform.system() == "Windows" else ":"
+            if base := os.getenv(env_var, ""):
+                base += sep
+            os.environ[env_var] = base + sep.join(
+                str(path.parent) for path in self._libraries.values()
             )
-            old_cdll = ctypes.CDLL
-
-            # Patch ctypes.CDLL to unconditionally use the desired mode and ignore the
-            # one passed by default in the parent loader class.
-            def new_cdll(name, mode=None, *args, **kwargs):  # noqa
-                return old_cdll(name, ctypes_mode, *args, **kwargs)
-
-            ctypes.CDLL = new_cdll  # type: ignore[misc,assignment]
+        else:
+            if self._mode == LoadMode.GLOBAL:
+                self._load = self._load_global  # type: ignore[method-assign]
             try:
-                super().load(prefer_system=prefer_system)
+                super().load(libraries, prefer_system=prefer_system)
             finally:
-                ctypes.CDLL = old_cdll  # type: ignore[misc]
+                # Note that the order of the comments here is important because ruff
+                # recognizes the noqa after the type comment while mypy does not detect
+                # the reverse.
+                self._load = library.LibraryLoader._load  # type: ignore[method-assign] # noqa: SLF001
 
 
 def monkeypatch() -> None:
     """Replace the loader with the testing loader and add loading mode support."""
-    library.LibraryLoader = TestingLibraryLoader  # type: ignore[misc]
+    library.LibraryLoader = TestingLibraryLoader  # type: ignore[misc, assignment]
     library.LoadMode = LoadMode  # type: ignore[attr-defined]

@@ -1,65 +1,112 @@
 """The implementation of loading for packages that contain a reusable native library."""
 
+from __future__ import annotations
+
 import ctypes
 import os
 import platform
 from os import PathLike
 from pathlib import Path
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
-class LibraryLoader:
-    """Container of loading logic for a native library associated with a module.
+class PlatformLibrary(NamedTuple):
+    """A tuple containing the paths to a library on different platforms.
 
     Parameters
     ----------
-    path_to_local_lib : PathLike
-        The path to the local library in the wheel.
-    lib_name : str
-        The name of the library to load
+    Linux : Path
+        The path to the library on Linux.
+    Darwin : Path
+        The path to the library on macOS.
+    Windows : Path
+        The path to the library on Windows.
 
     """
 
+    Linux: Path
+    Darwin: Path
+    Windows: Path
+
+
+class LibraryLoader:
+    """Loader for a set of native libraries associated with a module.
+
+    Parameters
+    ----------
+    libraries : dict[str, PlatformLibrary | tuple[PathLike | str, PathLike | str, PathLike | str]]
+        A mapping from library names to the paths of the libraries on each platform. If
+        a tuple is passed, it must be ordered as (Linux, Darwin, Windows).
+
+    """  # noqa: E501
+
     def __init__(
         self,
-        path_to_local_lib: PathLike,
-        lib_name: str,
+        libraries: dict[
+            str, PlatformLibrary | tuple[PathLike | str, PathLike | str, PathLike | str]
+        ],
     ):
-        self._path = path_to_local_lib
-        self._lib = lib_name
-        self._ext = (
-            "dll"
-            if platform.system() == "Windows"
-            else "dylib"
-            if platform.system() == "Darwin"
-            else "so"
-        )
-        self._prefix = "" if platform.system() == "Windows" else "lib"
-        self._full_lib_name = f"{self._prefix}{self._lib}.{self._ext}"
+        platform_name = platform.system()
 
-    def _load_internal(self) -> None:
-        """Load the native library in the package."""
-        ctypes.CDLL(
-            str(Path(self._path) / self._full_lib_name),
-            mode=ctypes.RTLD_LOCAL,
-        )
+        self._libraries = {}
+        for lib, path in libraries.items():
+            if isinstance(path, tuple):
+                path = PlatformLibrary(*(Path(p) for p in path))  # noqa: PLW2901
+            if not isinstance(path, PlatformLibrary):
+                msg = (
+                    f"Invalid path {path} for library {lib}. Expected a tuple or "
+                    "PlatformLibrary."
+                )
+                raise TypeError(msg)
 
-    def load(self, *, prefer_system: bool = False) -> None:
+            try:
+                self._libraries[lib] = getattr(path, platform_name)
+            except AttributeError:
+                msg = (
+                    f"No library {lib} found for the current platform {platform_name}. "
+                    f"This is a bug in the wheel, please report to the maintainer."
+                )
+                raise ValueError(msg) from None
+
+    @staticmethod
+    def _load(library_path: Path | str) -> None:
+        """Load the library at the given path with RTLD_LOCAL."""
+        ctypes.CDLL(str(library_path), mode=ctypes.RTLD_LOCAL)
+
+    def load(
+        self, libraries: Iterable[str] | None = None, *, prefer_system: bool = False
+    ) -> None:
         """Load the native library and return the ctypes.CDLL object.
 
         Parameters
         ----------
-        prefer_system : bool
+        libraries : Iterable[str] | None, optional
+            The names of the libraries to load. If None, all libraries are loaded.
+        prefer_system : bool, optional
             Whether or not to try loading a system library before the local version.
+            Default is False.
 
         """
         # Always load the library in local mode.
-        mode = ctypes.RTLD_LOCAL
-        if prefer_system or os.getenv(
-            f"PREFER_{self._lib.upper()}_SYSTEM_LIBRARY", "false"
-        ).lower() not in ("false", 0):
+
+        if libraries is None:
+            libraries = self._libraries.keys()
+
+        for library_name in libraries:
             try:
-                ctypes.CDLL(self._full_lib_name, mode)
-            except OSError:
-                self._load_internal()
-        else:
-            self._load_internal()
+                library_path = self._libraries[library_name]
+            except KeyError:
+                msg = f"Library {library_name} not found in the package."
+                raise ValueError(msg) from None
+            if prefer_system or os.getenv(
+                f"PREFER_{library_name.upper()}_SYSTEM_LIBRARY", "false"
+            ).lower() not in ("false", 0):
+                try:
+                    self._load(library_path.name)
+                except OSError:
+                    self._load(library_path)
+            else:
+                self._load(library_path)
