@@ -270,7 +270,7 @@ def make_cpp_lib(
 def make_cpp_pkg(
     root: PathLike | str,
     package_name: str,
-    library_name: str,
+    library_names: str | list[str],
     load_mode: str,
     *,
     square_as_cube: bool = False,
@@ -283,8 +283,8 @@ def make_cpp_pkg(
         The root directory for the package.
     package_name : str
         The name of the package.
-    library_name : str
-        The name of the library.
+    library_names : str | list[str]
+        The name of the library or libraries to build.
     load_mode : str
         The load mode used by the native_lib_loader.
     square_as_cube : bool, optional
@@ -298,6 +298,9 @@ def make_cpp_pkg(
     if lib_dir.exists():
         return
     lib_dir.mkdir(parents=True)
+
+    if isinstance(library_names, str):
+        library_names = [library_names]
 
     generate_from_template(
         lib_pkg_dir / "CMakeLists.txt",
@@ -317,16 +320,17 @@ def make_cpp_pkg(
     generate_from_template(
         lib_dir / "load.py",
         "load.py",
-        {"library_name": library_name, "load_mode": load_mode},
+        {"library_names": library_names, "load_mode": load_mode},
     )
 
-    make_cpp_lib(lib_dir, library_name, square_as_cube=square_as_cube)
+    for library_name in library_names:
+        make_cpp_lib(lib_dir, library_name, square_as_cube=square_as_cube)
 
 
 def make_python_pkg(  # noqa: PLR0913
     root: PathLike | str,
     package_name: str,
-    library_name: str,
+    library_names: str | list[str],
     cpp_package_name: str,
     *,
     dependencies: list | None = None,
@@ -343,8 +347,8 @@ def make_python_pkg(  # noqa: PLR0913
         The root directory for the package.
     package_name : str
         The name of the package.
-    library_name : str
-        The name of the library.
+    library_names : str | list[str]
+        The name of the library or libraries.
     cpp_package_name : str
         The name of the C++ package.
     dependencies : list, optional
@@ -380,11 +384,13 @@ def make_python_pkg(  # noqa: PLR0913
             "build_dependencies": build_dependencies,
         },
     )
+    if isinstance(library_names, str):
+        library_names = [library_names]
     generate_from_template(
         pylib_pkg_dir / "CMakeLists.txt",
         "py_CMakeLists.txt",
         {
-            "library_name": library_name,
+            "library_names": library_names,
             "package_name": package_name,
             "dependencies": dependencies,
             "build_dependencies": build_dependencies,

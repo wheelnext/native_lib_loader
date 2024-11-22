@@ -6,7 +6,9 @@ project(
   LANGUAGES C
 )
 
+{% for library_name in library_names %}
 find_package({{ library_name }} REQUIRED)
+{% endfor %}
 
 find_package(
   Python
@@ -20,7 +22,9 @@ get_target_property(example_include_dirs example::example INTERFACE_INCLUDE_DIRE
 target_include_directories(pylibexample PRIVATE "${example_include_dirs}")
 target_link_options(pylibexample PRIVATE "/FORCE:UNRESOLVED")
 {% else %}
+{% for library_name in library_names %}
 target_link_libraries({{ package_name }} PRIVATE {{ library_name }}::{{ library_name }})
+{% endfor %}
 {% endif %}
 
 {% if set_rpath %}
