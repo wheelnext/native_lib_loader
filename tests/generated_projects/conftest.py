@@ -1,6 +1,5 @@
 """Common test helpers."""
 
-import os
 import shutil
 import subprocess
 import tempfile
@@ -32,7 +31,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Configure whether or not to save the outputs for later inspection."""
-    os.environ["NATIVE_LIB_LOADER_TESTING"] = "1"
     if not config.getoption("--keep"):
         global ENV_ROOT  # noqa: PLW0603
         ENV_ROOT = Path(tempfile.mkdtemp())
@@ -74,6 +72,15 @@ def native_lib_loader_wheel(
     project_data["version"] = f"{version.major + 1}.{version.minor}.{version.micro}"
     with Path(pyproject_file).open("w") as f:
         tomlkit.dump(pyproject, f)
+
+    # Add the monkeypatching to the library.
+    # TODO: Also just add the file directly in tests so it's not in the source.
+    loader_init_file = (
+        native_lib_loader_dir / "native_lib_loader" / "library" / "__init__.py"
+    )
+    with Path(loader_init_file).open("a") as f:
+        f.write("from ._testing.monkeypatch import monkeypatch\n")
+        f.write("monkeypatch()\n")
 
     return subprocess.run(
         [
