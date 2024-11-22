@@ -40,9 +40,9 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(scope="session")
-def native_lib_loader_wheelhouse(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def native_lib_loader_wheelhouse() -> Path:
     """Produce the wheelhouse where the native_lib_loader built wheel goes."""
-    return tmp_path_factory.mktemp("nll_wheelhouse")
+    return ENV_ROOT / "nll_wheelhouse"
 
 
 @pytest.fixture(scope="session", autouse=True)
