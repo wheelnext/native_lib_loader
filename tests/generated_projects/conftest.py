@@ -32,10 +32,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Configure whether or not to save the outputs for later inspection."""
+    os.environ["NATIVE_LIB_LOADER_TESTING"] = "1"
     if not config.getoption("--keep"):
         global ENV_ROOT  # noqa: PLW0603
         ENV_ROOT = Path(tempfile.mkdtemp())
-        os.environ["NATIVE_LIB_LOADER_TESTING"] = "1"
         config.add_cleanup(lambda: shutil.rmtree(ENV_ROOT))
 
 
