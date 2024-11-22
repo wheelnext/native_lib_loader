@@ -20,7 +20,7 @@ install(
   EXPORT ${PROJECT_NAME}-exports
 )
 install(
-  FILES example.h
+  FILES {{ prefix }}example.h
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 

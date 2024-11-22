@@ -223,7 +223,11 @@ def generate_from_template(
 
 
 def make_cpp_lib(
-    root: PathLike | str, library_name: str, *, square_as_cube: bool = False
+    root: PathLike | str,
+    library_name: str,
+    *,
+    square_as_cube: bool = False,
+    prefix: str = "",
 ) -> None:
     """Generate a standard C++ library with a CMake build system.
 
@@ -235,11 +239,13 @@ def make_cpp_lib(
         The name of the library.
     square_as_cube : bool, optional
         Whether to implement the square function as a cube function.
+    prefix : str, optional
+        A prefix to add to the function names.
 
     """
     root = Path(root)
 
-    lib_src_dir = root / "cpp"
+    lib_src_dir = root / library_name
     lib_cmake_dir = lib_src_dir / "cmake"
     if lib_cmake_dir.exists():
         return
@@ -248,17 +254,22 @@ def make_cpp_lib(
     generate_from_template(
         lib_src_dir / "CMakeLists.txt",
         "cpp_CMakeLists.txt",
-        {"library_name": library_name},
+        {
+            "library_name": library_name,
+            "prefix": prefix,
+        },
     )
     generate_from_template(
-        lib_src_dir / "example.h",
+        lib_src_dir / f"{prefix}example.h",
         "example.h",
-        {"library_name": library_name},
+        {
+            "prefix": prefix,
+        },
     )
     generate_from_template(
         lib_src_dir / "example.c",
         "example.c",
-        {"library_name": library_name, "square_as_cube": square_as_cube},
+        {"prefix": prefix, "square_as_cube": square_as_cube},
     )
     generate_from_template(
         lib_cmake_dir / "config.cmake.in",
@@ -305,7 +316,10 @@ def make_cpp_pkg(
     generate_from_template(
         lib_pkg_dir / "CMakeLists.txt",
         "cpp_py_CMakeLists.txt",
-        {"package_name": package_name},
+        {
+            "package_name": package_name,
+            "library_names": library_names,
+        },
     )
     generate_from_template(
         lib_pkg_dir / "pyproject.toml",
@@ -323,8 +337,17 @@ def make_cpp_pkg(
         {"library_names": library_names, "load_mode": load_mode},
     )
 
+    use_prefix = len(library_names) > 1
+    prefix = ""
     for library_name in library_names:
-        make_cpp_lib(lib_dir, library_name, square_as_cube=square_as_cube)
+        if use_prefix:
+            prefix = f"{library_name}_"
+        make_cpp_lib(
+            lib_dir,
+            library_name,
+            square_as_cube=square_as_cube,
+            prefix=prefix,
+        )
 
 
 def make_python_pkg(  # noqa: PLR0913
@@ -411,10 +434,16 @@ def make_python_pkg(  # noqa: PLR0913
             "load_dynamic_lib": load_dynamic_lib,
         },
     )
+    prefixes = (
+        [""]
+        if len(library_names) == 1
+        else [f"{library_name}_" for library_name in library_names]
+    )
     generate_from_template(
         pylib_dir / "pylibexample.c",
         "pylibexample.c",
         {
+            "prefixes": prefixes,
             "package_name": package_name,
             "dependencies": dependencies,
             "build_dependencies": build_dependencies,
@@ -555,6 +584,75 @@ def basic_test(
     )
 
 
+def two_libraries_in_package_test(
+    native_lib_loader_wheelhouse: Path,
+    *,
+    load_mode: str = "GLOBAL",
+    load_dynamic_lib: bool = True,
+    set_rpath: bool = False,
+    python_editable: bool = False,
+    windows_unresolved_symbols: bool = False,
+) -> None:
+    """Test where the C++ package contains two libraries.
+
+    Parameters
+    ----------
+    native_lib_loader_wheelhouse : Path
+        The path to where the native_lib_loader wheel is.
+    load_mode : str
+        The load mode used by the native_lib_loader.
+    load_dynamic_lib : bool
+        Whether the Python package should dynamically load the native library.
+    set_rpath : bool
+        Whether the Python extension module should set the rpath.
+    python_editable : bool
+        Whether to install the Python package in editable mode.
+    windows_unresolved_symbols: bool, optional
+        Whether to avoid linking to the C++ library on the link line to test
+        unresolved symbol resolution on Windows.
+
+    """
+    root = dir_test(
+        "two_libraries_in_package",
+        load_mode=load_mode,
+        load_dynamic_lib=str(load_dynamic_lib),
+        set_rpath=str(set_rpath),
+        python_editable=str(python_editable),
+        windows_unresolved_symbols=str(windows_unresolved_symbols),
+    )
+    library_name, cpp_package_name, python_package_name = names("example")
+    library_names = [f"{library_name}_1", f"{library_name}_2"]
+    make_cpp_pkg(root, cpp_package_name, library_names, load_mode, square_as_cube=False)
+    make_python_pkg(
+        root,
+        python_package_name,
+        library_names,
+        cpp_package_name,
+        dependencies=["native_lib_loader", "libexample"],
+        build_dependencies=["scikit-build-core", "libexample"],
+        load_dynamic_lib=load_dynamic_lib,
+        set_rpath=set_rpath,
+        windows_unresolved_symbols=windows_unresolved_symbols,
+    )
+
+    env = VEnv(root, native_lib_loader_wheelhouse)
+    env.wheel(root / cpp_package_name)
+    if python_editable:
+        env.install(root / python_package_name, editable=python_editable)
+    else:
+        env.wheel(root / python_package_name)
+        env.install(python_package_name, "--no-index", editable=python_editable)
+    env.run(
+        """
+        import pylibexample
+        print(f"The square of 4 is {pylibexample.pylibexample.example_1_square(4)}")
+        assert pylibexample.pylibexample.example_1_square(4) == 16
+        print(f"The square of 4 is {pylibexample.pylibexample.example_2_square(4)}")
+        assert pylibexample.pylibexample.example_2_square(4) == 16
+        """,
+    )
+
+
 def two_colliding_packages_test(
     native_lib_loader_wheelhouse: Path,
     *,
@@ -640,6 +738,13 @@ def test_basic(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
     basic_test(native_lib_loader_wheelhouse, load_mode=load_mode)
 
 
+def test_two_libraries_in_package(
+    load_mode: str, native_lib_loader_wheelhouse: Path
+) -> None:
+    """Test a single Python extension loading an associated library."""
+    two_libraries_in_package_test(native_lib_loader_wheelhouse, load_mode=load_mode)
+
+
 def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) -> None:
     """Test the behavior when a library is only available at build time.
 
@@ -663,13 +768,13 @@ def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) ->
     # not seem to be working as expected when found.
     use_cpp_from_build = False
 
-    build_cmake_project(root / "cpp", install=not use_cpp_from_build)
+    build_cmake_project(root / library_name, install=not use_cpp_from_build)
 
     env = VEnv(root, native_lib_loader_wheelhouse)
     env.wheel(
         root / python_package_name,
         "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH="
-        + str(root / "cpp" / ("build" if use_cpp_from_build else "install")),
+        + str(root / library_name / ("build" if use_cpp_from_build else "install")),
     )
     env.install(python_package_name, "--no-index")
 

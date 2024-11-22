@@ -6,4 +6,6 @@ project(
   LANGUAGES C
 )
 
-add_subdirectory({{ package_name }}/cpp)
+{% for library_name in library_names %}
+add_subdirectory({{ package_name }}/{{ library_name }})
+{% endfor %}

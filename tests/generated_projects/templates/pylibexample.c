@@ -1,17 +1,23 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include <example.h>
+{% for prefix in prefixes %}
+#include <{{ prefix }}example.h>
+{% endfor %}
 
-static PyObject *square_wrapper(PyObject *self, PyObject *args) {
+{% for prefix in prefixes %}
+static PyObject *{{ prefix }}square_wrapper(PyObject *self, PyObject *args) {
   float input;
   if (!PyArg_ParseTuple(args, "f", &input)) {
     return NULL;
   }
-  return PyFloat_FromDouble(square(input));
+  return PyFloat_FromDouble({{ prefix }}square(input));
 }
+{% endfor %}
 
 static PyMethodDef {{ package_name }}_methods[] = {
-    {"square", square_wrapper, METH_VARARGS, "Square function"},
+{% for prefix in prefixes %}
+    {"{{ prefix }}square", {{ prefix }}square_wrapper, METH_VARARGS, "Square function"},
+{% endfor %}
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef {{ package_name }}_module = {PyModuleDef_HEAD_INIT, "{{ package_name }}",

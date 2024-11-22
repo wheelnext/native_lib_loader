@@ -1,1 +1,1 @@
-int square(int x);
+int {{ prefix }}square(int x);
