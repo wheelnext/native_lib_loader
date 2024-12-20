@@ -38,18 +38,14 @@ The fundamental challenge for distributing native libraries with `pip` is that i
 [PEP 725](https://peps.python.org/pep-0725/) offers one possible solution to the problem, allowing Python packages to declare dependencies on system packages in a way that pip or other wheel-building tools can understand.
 While something like this is ultimately necessary, a complete solution in this space is likely years away.
 We effectively need four things to happen:
-1.
-Wheels need a way of encoding that they depend on some library that may be found externally.
+1. Wheels need a way of encoding that they depend on some library that may be found externally.
 This is what PEP 725 enables via pyproject.toml metadata.
-2.
-pip and other build tools needs a way to translate that requirements list into a list of dependencies to find.
+2. pip and other build tools needs a way to translate that requirements list into a list of dependencies to find.
 This requires implementation on the part of each such tool.
-3.
-System (or system-like, e.g.
+3. System (or system-like, e.g.
 conda) package managers need to be updated to advertise to pip that a dependency installed by that package manager can be found.
 One option would be for package managers to expose some new metadata specific to pip, while an alternative would be for pip to leverage tools like CMake/meson/pkgconfig for their underlying finding capabilities.
-4.
-pip/wheels will need a standard install location for libraries that come bundled with a wheel, as well as handling step 3 (advertising what libraries are installed).
+4. pip/wheels will need a standard install location for libraries that come bundled with a wheel, as well as handling step 3 (advertising what libraries are installed).
 This may never be the focus if using system libraries (3) ends up always being the preferred route.
 
 Moreover, even if all of these occur we cannot assume that users will be in a position to easily install said external dependencies from a non-pip source.
