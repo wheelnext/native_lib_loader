@@ -115,48 +115,15 @@ A (roughly) platform-independent solution for making them visible is to leverage
 The concept ensures that load-time dependencies are satisfied in a deterministic fashion (for runtime linking it would be possible to support loading arbitrary numbers of versions of the same library using e.g.
 the local scopes used by the Linux loader as described in [section 1.5.4 of Drepper's dsohowto document](https://akkadia.org/drepper/dsohowto.pdf)).
 Since on all platforms the first library with a given "name" is automatically reused to satisfy future requests for that library, the crux of the matter is to identify the unique key used to identify libraries.
-1.
- Windows
-	1.
-Runtime linking: If two libraries with the same name but in different directories are loaded by path using `LoadLibrary`, the two handles will be distinct.
-If the second call uses the module name without a path, however, the same handle will be returned as the first time.
-In other words, the filename (e.g.
-`foo.dll`) is the unique key in the loaded library table, and all subsequent loads will use this.
-	2.
-Load-time linking: The first library loaded with a given name in any directory, either by `LoadLibrary` or via another load-time link, is the first one used.
-Therefore, a call to `LoadLibrary` with a given library name will ensure that all subsequent loads via transitive load-time dependencies will use that first library.
-2.
-OS X
-	1.
-Runtime linking: If two libraries with the same name but in different directories are loaded by path using `dlopen`, the two handles will be distinct.
-If the second call uses the module name without a path, then the loader first checks if a module with that [install name](https://developer.apple.com/library/archive/documentation/DeveloperTools/Conceptual/DynamicLibraries/100-Articles/OverviewOfDynamicLibraries.html#//apple_ref/doc/uid/TP40001873-SW1) (for more details on how install names are used by the linker, [see this post](https://forums.developer.apple.com/forums/thread/736719)) has been loaded previously.
-The install name of a binary is baked into it when it is built, but may be modified later using [install_name_tool](https://www.unix.com/man-page/osx/1/install_name_tool/).
-This means that unlike with Windows, the unique key used to identify a library to the loader for uniqueness is not the filename on disk, but the install name, which may or may not be the same.
-	2.
-Load-time linking: The exact details around this are somewhat complex.
-A binary expresses a load-time dependency on a dynamic library via an `LC_LOAD_DYLIB` load command (which can be seen using [`otool -l`](https://www.unix.com/man-page/osx/1/otool/)), and that dependency has a name encoded.
-If that name matches an existing loaded library's install name exactly in its entirety, the previously loaded library (whether loaded via runtime or load-time linking) will be used.
-I specify in its entirety because the `LC_LOAD_DYLIB` entry's name may include forward slashes as well as certain special values `@loader_path` and `@rpath`.
-For the purpose of checking the list of loaded libraries, neither these fields nor anything to the left of the final forward slash are considered special, i.e.
-an install name match requires an exact match of the entire name.
-If no previously loaded libraries match the encoded install name, however, then the loader will use the entry's name to search for the library, _after_ stripping out any directory names _except_ if the directory name includes one of the above special keys, in which case those are used as part of the path.
-The upshot is that the behavior for searching previously loaded libraries to satisfy load-time dependencies of a library in OS X is the same as Windows except that the unique key used to identify a library is not its filename on disk but rather its install name.
- 1.
-Linux
-	 1.
-Runtime linking: The situation on Linux is different than on OS X or Windows w.r.t.
-to loading by paths.
-If consecutive `dlopen` calls are passed paths to two libraries with the same name but at different paths, the second call may return a handle to the first loaded library even though the path is different.
-Even when given paths, `dlopen` on Linux will check the loaded-modules list before attempting to load the second copy.
-Note, however, that I said the second call _may_ return the first library.
-Whether or not the first library is returned depends on whether the libraries in question have their `DT_SONAME` properties set.
-The reason is that if two libraries have the same SONAME, the loader will treat them as the same library even if they were loaded from different paths, [as can be seen in the code to maintain the unique library list in glibc](https://codebrowser.dev/glibc/glibc/elf/dl-load.c.html#1972).
-Conversely if two libraries do not have an SONAME set, they may both be runtime loaded by a process even if they have the same name (note: whether intentionally or not, Python makes use of this fact to avoid having two extension modules with the same name conflict each other by not setting the SONAME on extension modules; it appears that [this has bitten at least LLVM once before](https://reviews.llvm.org/D107113?id=362936)).
-This behavior affects runtime dynamic loading in a way unique to Linux compared to Windows or OS X where it is always possible to load libraries by absolute path and get exactly what you expected.
-	 2.
-Load-time linking: With respect to load-time dependencies, the behavior on Linux is essentially the same as OS X except instead of the install name the unique key is the SONAME.
-If a library with a given SONAME has already been loaded, then it may be used to satisfy a load-time dependency for a future runtime loaded library.
-If not, then libraries are searched according to the rules mentioned above.
+1. Windows
+    1. Runtime linking: If two libraries with the same name but in different directories are loaded by path using `LoadLibrary`, the two handles will be distinct. If the second call uses the module name without a path, however, the same handle will be returned as the first time. In other words, the filename (e.g. `foo.dll`) is the unique key in the loaded library table, and all subsequent loads will use this.
+    2. Load-time linking: The first library loaded with a given name in any directory, either by `LoadLibrary` or via another load-time link, is the first one used. Therefore, a call to `LoadLibrary` with a given library name will ensure that all subsequent loads via transitive load-time dependencies will use that first library.
+2. OS X
+    1. Runtime linking: If two libraries with the same name but in different directories are loaded by path using `dlopen`, the two handles will be distinct. If the second call uses the module name without a path, then the loader first checks if a module with that [install name](https://developer.apple.com/library/archive/documentation/DeveloperTools/Conceptual/DynamicLibraries/100-Articles/OverviewOfDynamicLibraries.html#//apple_ref/doc/uid/TP40001873-SW1) (for more details on how install names are used by the linker, [see this post](https://forums.developer.apple.com/forums/thread/736719)) has been loaded previously. The install name of a binary is baked into it when it is built, but may be modified later using [install_name_tool](https://www.unix.com/man-page/osx/1/install_name_tool/). This means that unlike with Windows, the unique key used to identify a library to the loader for uniqueness is not the filename on disk, but the install name, which may or may not be the same.
+    2. Load-time linking: The exact details around this are somewhat complex. A binary expresses a load-time dependency on a dynamic library via an `LC_LOAD_DYLIB` load command (which can be seen using [`otool -l`](https://www.unix.com/man-page/osx/1/otool/)), and that dependency has a name encoded. If that name matches an existing loaded library's install name exactly in its entirety, the previously loaded library (whether loaded via runtime or load-time linking) will be used. I specify in its entirety because the `LC_LOAD_DYLIB` entry's name may include forward slashes as well as certain special values `@loader_path` and `@rpath`. For the purpose of checking the list of loaded libraries, neither these fields nor anything to the left of the final forward slash are considered special, i.e. an install name match requires an exact match of the entire name. If no previously loaded libraries match the encoded install name, however, then the loader will use the entry's name to search for the library, _after_ stripping out any directory names _except_ if the directory name includes one of the above special keys, in which case those are used as part of the path. The upshot is that the behavior for searching previously loaded libraries to satisfy load-time dependencies of a library in OS X is the same as Windows except that the unique key used to identify a library is not its filename on disk but rather its install name.
+3. Linux
+    1. Runtime linking: The situation on Linux is different than on OS X or Windows w.r.t. to loading by paths. If consecutive `dlopen` calls are passed paths to two libraries with the same name but at different paths, the second call may return a handle to the first loaded library even though the path is different. Even when given paths, `dlopen` on Linux will check the loaded-modules list before attempting to load the second copy. Note, however, that I said the second call _may_ return the first library. Whether or not the first library is returned depends on whether the libraries in question have their `DT_SONAME` properties set. The reason is that if two libraries have the same SONAME, the loader will treat them as the same library even if they were loaded from different paths, [as can be seen in the code to maintain the unique library list in glibc](https://codebrowser.dev/glibc/glibc/elf/dl-load.c.html#1972). Conversely if two libraries do not have an SONAME set, they may both be runtime loaded by a process even if they have the same name (note: whether intentionally or not, Python makes use of this fact to avoid having two extension modules with the same name conflict each other by not setting the SONAME on extension modules; it appears that [this has bitten at least LLVM once before](https://reviews.llvm.org/D107113?id=362936)). This behavior affects runtime dynamic loading in a way unique to Linux compared to Windows or OS X where it is always possible to load libraries by absolute path and get exactly what you expected.
+    2. Load-time linking: With respect to load-time dependencies, the behavior on Linux is essentially the same as OS X except instead of the install name the unique key is the SONAME. If a library with a given SONAME has already been loaded, then it may be used to satisfy a load-time dependency for a future runtime loaded library. If not, then libraries are searched according to the rules mentioned above.
 
 Therefore, in order to make a native library available for an extension module, it is sufficient to load it in a way that adds it to the registry of loaded modules.
 On Windows, a `LoadLibrary` call is sufficient.
