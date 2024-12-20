@@ -27,9 +27,9 @@ class PlatformLibrary(NamedTuple):
 
     """
 
-    Linux: Path
-    Darwin: Path
-    Windows: Path
+    Linux: Path | None = None
+    Darwin: Path | None = None
+    Windows: Path | None = None
 
 
 class LibraryLoader:
