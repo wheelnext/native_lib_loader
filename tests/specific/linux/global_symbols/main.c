@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+// SPDX-License-Identifier: Apache-2.0
+
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +32,7 @@ int main() {
 
     dlclose(b_handle);
     if (getenv("LOAD_A") != NULL) {
-        dlclose(a_handle); 
+        dlclose(a_handle);
         printf("With a loaded, the fourth power of %d is %d, got %d\n", x, expected, actual);
     } else {
         printf("The fourth power of %d is %d, got %d\n", x, expected, actual);

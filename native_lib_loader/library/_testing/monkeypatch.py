@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-License-Identifier: Apache-2.0
+
 """Set of patches for testing unsupported versions of library loading.
 
 The versions of library loading that this module adds support for are either
