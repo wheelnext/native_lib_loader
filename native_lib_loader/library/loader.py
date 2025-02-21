@@ -10,29 +10,63 @@ import os
 import platform
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-class PlatformLibrary(NamedTuple):
+# Once we require Python 3.10, switch to using a dataclass with kw_only=True
+class PlatformLibrary:
     """A tuple containing the paths to a library on different platforms.
 
     Parameters
     ----------
-    Linux : Path
+    Linux : PathLike, optional
         The path to the library on Linux.
-    Darwin : Path
+    Darwin : PathLike, optional
         The path to the library on macOS.
-    Windows : Path
+    Windows : PathLike, optional
         The path to the library on Windows.
+    default : Callable[[], PathLike], optional
+        A callable that returns the default path to the library. This is used when the
+        current platform is not found in the library paths. It may also be used by
+        libraries that require a more general key for determining what path to use if
+        the choice needs to be made at runtime based on additional factors.
 
     """
 
-    Linux: Path | None = None
-    Darwin: Path | None = None
-    Windows: Path | None = None
+    Linux: Path | None
+    Darwin: Path | None
+    Windows: Path | None
+
+    def __init__(
+        self,
+        *,
+        Darwin: PathLike | str | None = None,  # noqa: N803
+        Linux: PathLike | str | None = None,  # noqa: N803
+        Windows: PathLike | str | None = None,  # noqa: N803
+        default: Callable[[], PathLike | str] | None = None,
+    ):
+        # public attributes should correspond to platform.system() return values:
+        # https://docs.python.org/3/library/platform.html#platform.system
+        # TODO: Determine if sys.platform is more appropriate
+        # https://discuss.python.org/t/clarify-usage-of-platform-system/70900/4
+        if not all(
+            isinstance(path, (PathLike, str)) or path is None
+            for path in (Darwin, Linux, Windows)
+        ):
+            raise TypeError("Paths must be instances of pathlib.Path, str, or None.")
+        self.Darwin = Path(Darwin) if Darwin else None
+        self.Linux = Path(Linux) if Linux else None
+        self.Windows = Path(Windows) if Windows else None
+        if not all(
+            p.is_absolute()
+            for p in (self.Darwin, self.Linux, self.Windows)
+            if p is not None
+        ):
+            raise ValueError("All paths must be absolute.")
+        self.default = default
 
 
 class LibraryLoader:
@@ -48,31 +82,29 @@ class LibraryLoader:
 
     def __init__(
         self,
-        libraries: dict[
-            str, PlatformLibrary | tuple[PathLike | str, PathLike | str, PathLike | str]
-        ],
+        libraries: dict[str, PlatformLibrary],
     ):
         platform_name = platform.system()
 
         self._libraries = {}
         for lib, path in libraries.items():
-            if isinstance(path, tuple):
-                path = PlatformLibrary(*(Path(p) for p in path))  # noqa: PLW2901
             if not isinstance(path, PlatformLibrary):
-                msg = (
+                raise TypeError(
                     f"Invalid path {path} for library {lib}. Expected a tuple or "
                     "PlatformLibrary."
                 )
-                raise TypeError(msg)
 
             try:
                 self._libraries[lib] = getattr(path, platform_name)
             except AttributeError:
-                msg = (
-                    f"No library {lib} found for the current platform {platform_name}. "
-                    f"This is a bug in the wheel, please report to the maintainer."
-                )
-                raise ValueError(msg) from None
+                if path.default is not None:
+                    self._libraries[lib] = Path(path.default())
+                else:
+                    raise ValueError(
+                        f"No library {lib} found for the current platform "
+                        f"{platform_name}. This is a bug in the wheel, please report "
+                        "to the maintainer."
+                    ) from None
 
     @staticmethod
     def _load(library_path: Path | str) -> None:
@@ -102,8 +134,9 @@ class LibraryLoader:
             try:
                 library_path = self._libraries[library_name]
             except KeyError:
-                msg = f"Library {library_name} not found in the package."
-                raise ValueError(msg) from None
+                raise ValueError(
+                    f"Library {library_name} not found in the package."
+                ) from None
             if prefer_system or os.getenv(
                 f"PREFER_{library_name.upper()}_SYSTEM_LIBRARY", "false"
             ).lower() not in ("false", 0):

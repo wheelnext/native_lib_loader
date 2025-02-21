@@ -14,7 +14,7 @@ authors = [
     { name = "Vyas Ramasubramani" },
 ]
 license = { text = "Apache 2.0" }
-# TODO: Determine minimum Python version
+# TODO: Determine minimum Python version. We may need to support earlier.
 requires-python = ">=3.9"
 
 [tool.ruff]
@@ -48,6 +48,9 @@ ignore = [
     "FIX002",
     # Sometimes we need raw noqa
     "PGH004",
+    # We prefer messages inside the exception
+    "EM",
+    "TRY003",
 ]
 fixable = ["ALL"]
 
