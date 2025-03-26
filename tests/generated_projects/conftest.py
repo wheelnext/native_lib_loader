@@ -13,7 +13,9 @@ import tomlkit
 from packaging.version import parse as parse_version
 
 DIR = Path(__file__).parent
-NATIVE_LIB_DIR = DIR.parent.parent
+ROOT_DIR = DIR.parent.parent
+MANAGER_DIR = ROOT_DIR / "pkgs" / "shared_lib_manager"
+CONSUMER_DIR = ROOT_DIR / "pkgs" / "shared_lib_consumer"
 
 COMMON_PIP_ARGS = (
     "-m",
@@ -41,32 +43,31 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(scope="session")
-def native_lib_loader_wheelhouse() -> Path:
-    """Produce the wheelhouse where the native_lib_loader built wheel goes."""
-    return ENV_ROOT / "nll_wheelhouse"
+def package_wheelhouse() -> Path:
+    """Produce the wheelhouse where the built packages go."""
+    return ENV_ROOT / "package_wheelhouse"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def native_lib_loader_wheel(
-    tmp_path_factory: pytest.TempPathFactory, native_lib_loader_wheelhouse: Path
-) -> subprocess.CompletedProcess:
-    """Produce a wheel for native_lib_loader.
+def create_patched_library(
+    tmp_path_factory: pytest.TempPathFactory, pkg_source_dir: Path
+) -> Path:
+    """Produce a copy of the source package with a modified version.
 
-    Build in a temporary directory where we can increment the version to ensure that
-    this version is preferred to any other.
+    The incremented version ensures that this version is preferred to any other
+    available on public indexes.
     """
-    native_lib_loader_dir = tmp_path_factory.mktemp("nll_dir")
+    tmp_package_dir = tmp_path_factory.mktemp(pkg_source_dir.name)
 
     shutil.copytree(
-        NATIVE_LIB_DIR,
-        native_lib_loader_dir,
+        pkg_source_dir,
+        tmp_package_dir,
         ignore=shutil.ignore_patterns(
             "tests*", "build*", "dist*", "*.egg-info*", ".git"
         ),
         dirs_exist_ok=True,
     )
 
-    pyproject_file = native_lib_loader_dir / "pyproject.toml"
+    pyproject_file = tmp_package_dir / "pyproject.toml"
     with Path(pyproject_file).open() as f:
         pyproject = tomlkit.load(f)
     project_data = pyproject["project"]
@@ -76,15 +77,27 @@ def native_lib_loader_wheel(
     with Path(pyproject_file).open("w") as f:
         tomlkit.dump(pyproject, f)
 
-    # Add the monkeypatching to the library.
-    # TODO: Also just add the file directly in tests so it's not in the source.
-    loader_init_file = (
-        native_lib_loader_dir / "native_lib_loader" / "library" / "__init__.py"
-    )
-    with Path(loader_init_file).open("a") as f:
-        f.write("from ._testing.monkeypatch import monkeypatch\n")
-        f.write("monkeypatch()\n")
+    return tmp_package_dir
 
+
+def make_wheel(
+    package_wheelhouse: Path, package_dir: Path
+) -> subprocess.CompletedProcess:
+    """Build a wheel for the package.
+
+    Parameters
+    ----------
+    package_wheelhouse : Path
+        The directory where the wheel should be stored.
+    package_dir : Path
+        The directory of the package to be built.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The result of the wheel building process.
+
+    """
     return subprocess.run(
         [
             "python",
@@ -92,11 +105,37 @@ def native_lib_loader_wheel(
             "wheel",
             "--no-deps",
             "--wheel-dir",
-            native_lib_loader_wheelhouse,
-            native_lib_loader_dir,
+            package_wheelhouse,
+            package_dir,
         ],
         check=False,
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_lib_manager_wheel(
+    tmp_path_factory: pytest.TempPathFactory, package_wheelhouse: Path
+) -> subprocess.CompletedProcess:
+    """Produce a wheel for the shared_lib_manager."""
+    tmp_package_dir = create_patched_library(tmp_path_factory, MANAGER_DIR)
+
+    # Add the monkeypatching to the library.
+    # TODO: Also just add the file directly in tests so it's not in the source.
+    loader_init_file = tmp_package_dir / "shared_lib_manager.py"
+    with Path(loader_init_file).open("a") as f, Path(
+        DIR / "monkeypatch.py"
+    ).open() as mp:
+        f.write(mp.read())
+    return make_wheel(package_wheelhouse, tmp_package_dir)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_lib_consumer_wheel(
+    tmp_path_factory: pytest.TempPathFactory, package_wheelhouse: Path
+) -> subprocess.CompletedProcess:
+    """Produce a wheel for the shared_lib_manager."""
+    tmp_package_dir = create_patched_library(tmp_path_factory, CONSUMER_DIR)
+    return make_wheel(package_wheelhouse, tmp_package_dir)
 
 
 @pytest.fixture(scope="session", params=("LOCAL", "GLOBAL"))
