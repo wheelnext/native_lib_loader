@@ -18,39 +18,14 @@ Non-Goals:
 The code in this repository is extremely minimal and can easily be vendored directly into any codebase.
 Most of the complexity is in understanding the various edge cases and how this tool chooses an approach that manages to handle as many of them as possible.
 
-## Usage
+## Contents
 
-Both producers and consumers of a library must use this module for consistent behavior.
-A package shipping a native library should place the following snippet in their `__init__.py` (or make the loader module visible at some other well-defined location).
+This repository contains two packages:
+- `shared_lib_manager`: This package centralizes best practices for shipping shared libraries in Python wheels.
+- `shared_lib_consumer`: This package provides a way to load shared libraries exported by `native_lib_manager`.
 
-```python
-# __init__.py
-import native_lib_loader
-import os
-
-root = os.path.dirname(os.path.abspath(__file__))
-loader = native_lib_loader.library.LibraryLoader(
-    {
-        "foo": native_lib_loader.PlatformLibrary(
-            Darwin=os.path.join(root, "lib", "libfoo.dylib"),
-            Windows=os.path.join(root, "lib", "foo.dll"),
-        ),
-    },
-    mode=native_lib_loader.library.LoadMode.{{ load_mode }},
-)
-```
-
-Note that libraries are responsible for specifying per-platform paths, but are free to specify only platforms that they support.
-
-Once this code exists, consumers use `native_lib_loader` like so:
-
-```python
-import native_lib_loader
-native_lib_loader.consumer.load_library_module("foo")
-```
-
-The library name specified on the consumer side matches the key specified to the loader above.
-This allows a package to provide multiple libraries and the consumer may choose which ones they need.
+Most of the meat is in the `shared_lib_manager` package.
+Either of these can be easily vendored into a codebase.
 
 ## High-Level Description
 

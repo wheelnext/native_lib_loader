@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate a set of test cases for the native_lib_loader package."""
+"""Generate a set of test cases for loading shared libraries."""
 
 from __future__ import annotations
 
@@ -39,11 +39,11 @@ class VEnv:
 
     """
 
-    def __init__(self, root: Path, native_lib_loader_wheelhouse: Path):
+    def __init__(self, root: Path, package_wheelhouse: Path):
         self.env_dir = root / "env"
         Path(self.env_dir).mkdir(exist_ok=True)
 
-        self.nll_wheelhouse = str(native_lib_loader_wheelhouse)
+        self.nll_wheelhouse = str(package_wheelhouse)
         self.wheelhouse = str(root / "wheelhouse")
         self.cache_dir = str(root / "cache")
 
@@ -300,7 +300,7 @@ def make_cpp_pkg(
     library_names : str | list[str]
         The name of the library or libraries to build.
     load_mode : str
-        The load mode used by the native_lib_loader.
+        The load mode used.
     square_as_cube : bool, optional
         Whether to implement the square function as a cube function.
 
@@ -519,7 +519,7 @@ def names(base_name: str) -> tuple[str, str, str]:
 # Test cases
 #############################################
 def basic_test(
-    native_lib_loader_wheelhouse: Path,
+    package_wheelhouse: Path,
     *,
     load_mode: str = "GLOBAL",
     load_dynamic_lib: bool = True,
@@ -534,10 +534,10 @@ def basic_test(
 
     Parameters
     ----------
-    native_lib_loader_wheelhouse : Path
-        The path to where the native_lib_loader wheel is.
+    package_wheelhouse : Path
+        The path to where the wheels to test are.
     load_mode : str
-        The load mode used by the native_lib_loader.
+        The load mode used.
     load_dynamic_lib : bool
         Whether the Python package should dynamically load the native library.
     set_rpath : bool
@@ -564,14 +564,14 @@ def basic_test(
         python_package_name,
         library_name,
         cpp_package_name,
-        dependencies=["native_lib_loader", "libexample"],
+        dependencies=["shared_lib_consumer", "libexample"],
         build_dependencies=["scikit-build-core", "libexample"],
         load_dynamic_lib=load_dynamic_lib,
         set_rpath=set_rpath,
         windows_unresolved_symbols=windows_unresolved_symbols,
     )
 
-    env = VEnv(root, native_lib_loader_wheelhouse)
+    env = VEnv(root, package_wheelhouse)
     env.wheel(root / cpp_package_name)
     if python_editable:
         env.install(root / python_package_name, editable=python_editable)
@@ -588,7 +588,7 @@ def basic_test(
 
 
 def two_libraries_in_package_test(
-    native_lib_loader_wheelhouse: Path,
+    package_wheelhouse: Path,
     *,
     load_mode: str = "GLOBAL",
     load_dynamic_lib: bool = True,
@@ -600,10 +600,10 @@ def two_libraries_in_package_test(
 
     Parameters
     ----------
-    native_lib_loader_wheelhouse : Path
-        The path to where the native_lib_loader wheel is.
+    package_wheelhouse : Path
+        The path to where the wheels to test are.
     load_mode : str
-        The load mode used by the native_lib_loader.
+        The load mode used.
     load_dynamic_lib : bool
         Whether the Python package should dynamically load the native library.
     set_rpath : bool
@@ -631,14 +631,14 @@ def two_libraries_in_package_test(
         python_package_name,
         library_names,
         cpp_package_name,
-        dependencies=["native_lib_loader", "libexample"],
+        dependencies=["shared_lib_consumer", "libexample"],
         build_dependencies=["scikit-build-core", "libexample"],
         load_dynamic_lib=load_dynamic_lib,
         set_rpath=set_rpath,
         windows_unresolved_symbols=windows_unresolved_symbols,
     )
 
-    env = VEnv(root, native_lib_loader_wheelhouse)
+    env = VEnv(root, package_wheelhouse)
     env.wheel(root / cpp_package_name)
     if python_editable:
         env.install(root / python_package_name, editable=python_editable)
@@ -657,7 +657,7 @@ def two_libraries_in_package_test(
 
 
 def two_colliding_packages_test(
-    native_lib_loader_wheelhouse: Path,
+    package_wheelhouse: Path,
     *,
     load_mode: str = "GLOBAL",
     load_dynamic_lib: bool = True,
@@ -669,10 +669,10 @@ def two_colliding_packages_test(
 
     Parameters
     ----------
-    native_lib_loader_wheelhouse : Path
-        The path to where the native_lib_loader wheel is.
+    package_wheelhouse : Path
+        The path to where the wheels to test are.
     load_mode : str
-        The load mode used by the native_lib_loader.
+        The load mode used.
     load_dynamic_lib : bool
         Whether the Python package should dynamically load the native library.
     set_rpath : bool
@@ -694,7 +694,7 @@ def two_colliding_packages_test(
         foo_python_package_name,
         foo_library_name,
         foo_cpp_package_name,
-        dependencies=["native_lib_loader", "libfoo"],
+        dependencies=["shared_lib_consumer", "libfoo"],
         build_dependencies=["scikit-build-core", "libfoo"],
         load_dynamic_lib=load_dynamic_lib,
         set_rpath=set_rpath,
@@ -709,13 +709,13 @@ def two_colliding_packages_test(
         bar_python_package_name,
         bar_library_name,
         bar_cpp_package_name,
-        dependencies=["native_lib_loader", "libbar"],
+        dependencies=["shared_lib_consumer", "libbar"],
         build_dependencies=["scikit-build-core", "libbar"],
         load_dynamic_lib=load_dynamic_lib,
         set_rpath=set_rpath,
     )
 
-    env = VEnv(root, native_lib_loader_wheelhouse)
+    env = VEnv(root, package_wheelhouse)
     env.wheel(root / foo_cpp_package_name)
     env.wheel(root / foo_python_package_name)
     env.install(foo_python_package_name, "--no-index")
@@ -736,23 +736,21 @@ def two_colliding_packages_test(
     )
 
 
-def test_basic(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
+def test_basic(load_mode: str, package_wheelhouse: Path) -> None:
     """Test a single Python extension loading an associated library."""
-    basic_test(native_lib_loader_wheelhouse, load_mode=load_mode)
+    basic_test(package_wheelhouse, load_mode=load_mode)
 
 
-def test_two_libraries_in_package(
-    load_mode: str, native_lib_loader_wheelhouse: Path
-) -> None:
+def test_two_libraries_in_package(load_mode: str, package_wheelhouse: Path) -> None:
     """Test a single Python extension loading an associated library."""
-    two_libraries_in_package_test(native_lib_loader_wheelhouse, load_mode=load_mode)
+    two_libraries_in_package_test(package_wheelhouse, load_mode=load_mode)
 
 
-def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) -> None:
+def test_lib_only_available_at_build_test(package_wheelhouse: Path) -> None:
     """Test the behavior when a library is only available at build time.
 
     In this case we expect to see runtime failures in the form of loader errors (which
-    should be caught by the native_lib_loader).
+    should be caught by the shared_lib_manager).
     """
     root = dir_test("lib_only_available_at_build")
     library_name, cpp_package_name, python_package_name = names("example")
@@ -762,7 +760,7 @@ def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) ->
         python_package_name,
         library_name,
         cpp_package_name,
-        dependencies=["native_lib_loader"],
+        dependencies=["shared_lib_consumer"],
         build_dependencies=["scikit-build-core"],
         load_dynamic_lib=True,
     )
@@ -773,7 +771,7 @@ def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) ->
 
     build_cmake_project(root / library_name, install=not use_cpp_from_build)
 
-    env = VEnv(root, native_lib_loader_wheelhouse)
+    env = VEnv(root, package_wheelhouse)
     env.wheel(
         root / python_package_name,
         "--config-settings=cmake.args=-DCMAKE_PREFIX_PATH="
@@ -797,9 +795,7 @@ def test_lib_only_available_at_build_test(native_lib_loader_wheelhouse: Path) ->
         assert err_msg in stderr, f"Did not get expected message, instead got {stderr}"
 
 
-def test_two_colliding_packages(
-    load_mode: str, native_lib_loader_wheelhouse: Path
-) -> None:
+def test_two_colliding_packages(load_mode: str, package_wheelhouse: Path) -> None:
     """Test using two libraries with symbol collisions.
 
     This test should work when loading locally, but global loads should collide.
@@ -807,7 +803,7 @@ def test_two_colliding_packages(
     # Note that the load mode does not affect Windows
     try:
         # Global loads should fail due to symbol conflicts
-        two_colliding_packages_test(native_lib_loader_wheelhouse, load_mode=load_mode)
+        two_colliding_packages_test(package_wheelhouse, load_mode=load_mode)
     except subprocess.CalledProcessError as e:
         # Failures are expected due to symbol collisions when loading globally.
         if load_mode == "GLOBAL":
@@ -821,29 +817,29 @@ def test_two_colliding_packages(
 @pytest.mark.skipif(
     platform.system() != "Linux", reason="RPATH only supported on Linux"
 )
-def test_rpath(load_mode: str, native_lib_loader_wheelhouse: Path) -> None:
+def test_rpath(load_mode: str, package_wheelhouse: Path) -> None:
     """Verify that RPATH works under normal circumstances."""
     basic_test(
-        native_lib_loader_wheelhouse,
+        package_wheelhouse,
         load_mode=load_mode,
         load_dynamic_lib=False,
         set_rpath=True,
     )
 
 
-def test_editable_install(native_lib_loader_wheelhouse: Path) -> None:
+def test_editable_install(package_wheelhouse: Path) -> None:
     """Show that dynamic loading works for editable installs."""
-    basic_test(native_lib_loader_wheelhouse, load_mode="LOCAL", python_editable=True)
+    basic_test(package_wheelhouse, load_mode="LOCAL", python_editable=True)
 
 
 @pytest.mark.skipif(
     platform.system() != "Linux", reason="RPATH only supported on Linux"
 )
-def test_editable_install_with_rpath(native_lib_loader_wheelhouse: Path) -> None:
+def test_editable_install_with_rpath(package_wheelhouse: Path) -> None:
     """Show that RPATHs do not work for editable installs with incompatible layouts."""
     try:
         basic_test(
-            native_lib_loader_wheelhouse,
+            package_wheelhouse,
             load_mode="LOCAL",
             load_dynamic_lib=False,
             set_rpath=True,
@@ -854,10 +850,10 @@ def test_editable_install_with_rpath(native_lib_loader_wheelhouse: Path) -> None
         assert "ImportError: " in stderr
 
 
-def test_env_vars(native_lib_loader_wheelhouse: Path) -> None:
+def test_env_vars(package_wheelhouse: Path) -> None:
     """Show that setting LD_LIBRARY_PATH/DYLD_LIBRARY_PATH/PATH doesn't work."""
     try:
-        basic_test(native_lib_loader_wheelhouse, load_mode="ENV")
+        basic_test(package_wheelhouse, load_mode="ENV")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode()
         assert "ImportError: " in stderr
@@ -866,21 +862,21 @@ def test_env_vars(native_lib_loader_wheelhouse: Path) -> None:
 @pytest.mark.skipif(
     platform.system() != "Windows", reason="This test is Windows-specific"
 )
-def test_windows_unresolved_symbols(native_lib_loader_wheelhouse: Path) -> None:
+def test_windows_unresolved_symbols(package_wheelhouse: Path) -> None:
     """Demonstrate unresolved symbols on Windows."""
     # Failure is expected, but the failure in this case is basically UB
     # so we can't predict what the error code will be. Most likely the
     # code is seg faulting.
     with contextlib.suppress(subprocess.CalledProcessError):
         basic_test(
-            native_lib_loader_wheelhouse,
+            package_wheelhouse,
             load_mode="LOCAL",
             windows_unresolved_symbols=True,
         )
     # Load mode should be irrelevant on Windows, but testing to verify.
     with contextlib.suppress(subprocess.CalledProcessError):
         basic_test(
-            native_lib_loader_wheelhouse,
+            package_wheelhouse,
             load_mode="GLOBAL",
             windows_unresolved_symbols=True,
         )

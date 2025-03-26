@@ -9,7 +9,7 @@ build-backend = "scikit_build_core.build"
 name = "{{ package_name }}"
 version = "0.0.1"
 dependencies = [
-    "native_lib_loader",
+    "shared_lib_manager",
 ]
 
 [tool.scikit-build]

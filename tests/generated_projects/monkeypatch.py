@@ -8,20 +8,17 @@ intrinsically dangerous or simply nonfunctional. The primary purpose of this mod
 to enable testing of those approaches without exposing them via the public API.
 """
 
-from __future__ import annotations
-
 import ctypes
 import os
 import platform
+from collections.abc import Iterable
 from enum import Enum, auto
-from os import PathLike
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-from native_lib_loader import library
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from pathlib import Path
+# Need to disable this because we cannot put `from __future__ import annotations` into
+# this file without breaking the interpreter since all of this code is injected into the
+# middle of a module instead of the beginning.
+# ruff: noqa: FA102
 
 
 class LoadMode(Enum):
@@ -32,7 +29,11 @@ class LoadMode(Enum):
     ENV = auto()
 
 
-class TestingLibraryLoader(library.LibraryLoader):
+# Create an alias so we don't lose the original reference after the override.
+LibraryLoaderOriginal = LibraryLoader  # type: ignore[misc, used-before-def] # noqa: F821
+
+
+class TestingLibraryLoader(LibraryLoaderOriginal):
     """Library loader that allows for testing of unsupported library loading methods.
 
     This loader add support for RTLD_GLOBAL and environment variable-based loading,
@@ -41,11 +42,7 @@ class TestingLibraryLoader(library.LibraryLoader):
 
     def __init__(
         self,
-        libraries: dict[
-            str,
-            library.PlatformLibrary
-            | tuple[PathLike | str, PathLike | str, PathLike | str],
-        ],
+        libraries: dict[str, PlatformLibrary],  # type: ignore[name-defined] # noqa: F821
         *,
         mode: LoadMode = LoadMode.GLOBAL,
     ):
@@ -53,12 +50,15 @@ class TestingLibraryLoader(library.LibraryLoader):
         self._mode = mode
 
     @staticmethod
-    def _load_global(library_path: Path | str) -> None:
+    def _load_global(library_path: Path | str) -> None:  # type: ignore[syntax]
         """Load the library at the given path with RTLD_GLOBAL."""
         ctypes.CDLL(str(library_path), mode=ctypes.RTLD_GLOBAL)
 
     def load(
-        self, libraries: Iterable[str] | None = None, *, prefer_system: bool = False
+        self,
+        libraries: Iterable[str] | None = None,  # type: ignore[syntax]
+        *,
+        prefer_system: bool = False,
     ) -> None:
         """Load the native library and return the ctypes.CDLL object.
 
@@ -94,10 +94,7 @@ class TestingLibraryLoader(library.LibraryLoader):
                 # Note that the order of the comments here is important because ruff
                 # recognizes the noqa after the type comment while mypy does not detect
                 # the reverse.
-                self._load = library.LibraryLoader._load  # type: ignore[method-assign] # noqa: SLF001
+                self._load = LibraryLoaderOriginal._load  # type: ignore[method-assign] # noqa: SLF001
 
 
-def monkeypatch() -> None:
-    """Replace the loader with the testing loader and add loading mode support."""
-    library.LibraryLoader = TestingLibraryLoader  # type: ignore[misc, assignment]
-    library.LoadMode = LoadMode  # type: ignore[attr-defined]
+LibraryLoader = TestingLibraryLoader  # type: ignore[misc]

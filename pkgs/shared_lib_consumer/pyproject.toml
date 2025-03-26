@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shared_lib_consumer"
+version = "0.0.1"
+description = "A library for packages that consume shared libraries shipped by packages using shared_lib_manager"
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [
+    { name = "Vyas Ramasubramani" },
+]
+license = { text = "Apache 2.0" }
+# TODO: Determine minimum Python version. We may need to support earlier.
+requires-python = ">=3.9"
