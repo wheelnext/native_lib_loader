@@ -8,7 +8,6 @@ from __future__ import annotations
 import ctypes
 import os
 import platform
-from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
@@ -22,13 +21,13 @@ class PlatformLibrary:
 
     Parameters
     ----------
-    Linux : PathLike, optional
+    Linux : os.PathLike
         The path to the library on Linux.
-    Darwin : PathLike, optional
+    Darwin : os.PathLike
         The path to the library on macOS.
-    Windows : PathLike, optional
+    Windows : os.PathLike
         The path to the library on Windows.
-    default : Callable[[], PathLike], optional
+    default : typing.Callable[[], os.PathLike]
         A callable that returns the default path to the library. This is used when the
         current platform is not found in the library paths. It may also be used by
         libraries that require a more general key for determining what path to use if
@@ -43,17 +42,17 @@ class PlatformLibrary:
     def __init__(
         self,
         *,
-        Darwin: PathLike | str | None = None,  # noqa: N803
-        Linux: PathLike | str | None = None,  # noqa: N803
-        Windows: PathLike | str | None = None,  # noqa: N803
-        default: Callable[[], PathLike | str] | None = None,
+        Darwin: os.PathLike | str | None = None,  # noqa: N803
+        Linux: os.PathLike | str | None = None,  # noqa: N803
+        Windows: os.PathLike | str | None = None,  # noqa: N803
+        default: Callable[[], os.PathLike | str] | None = None,
     ):
         # public attributes should correspond to platform.system() return values:
         # https://docs.python.org/3/library/platform.html#platform.system
         # TODO: Determine if sys.platform is more appropriate
         # https://discuss.python.org/t/clarify-usage-of-platform-system/70900/4
         if not all(
-            isinstance(path, (PathLike, str)) or path is None
+            isinstance(path, (os.PathLike, str)) or path is None
             for path in (Darwin, Linux, Windows)
         ):
             raise TypeError("Paths must be instances of pathlib.Path, str, or None.")
@@ -74,7 +73,7 @@ class LibraryLoader:
 
     Parameters
     ----------
-    libraries : dict[str, PlatformLibrary | tuple[PathLike | str, PathLike | str, PathLike | str]]
+    libraries : dict[str, PlatformLibrary | tuple[os.PathLike | str, os.PathLike | str, os.PathLike | str]]
         A mapping from library names to the paths of the libraries on each platform. If
         a tuple is passed, it must be ordered as (Linux, Darwin, Windows).
 
@@ -118,9 +117,9 @@ class LibraryLoader:
 
         Parameters
         ----------
-        libraries : Iterable[str] | None, optional
+        libraries : typing.Iterable[str] | None
             The names of the libraries to load. If None, all libraries are loaded.
-        prefer_system : bool, optional
+        prefer_system : bool
             Whether or not to try loading a system library before the local version.
             Default is False.
 
