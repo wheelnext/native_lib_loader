@@ -1,17 +1,15 @@
-[project]
+[tool.poetry]
 name = "shared-lib-consumer"
 version = "0.1.0"
 description = "A library for packages that consume shared libraries shipped by packages using shared_lib_manager"
-authors = [
-    {name = "Vyas Ramasubramani",email = "vyasr@nvidia.com"}
-]
-license = {text = "Apache 2.0"}
+authors = ["Vyas Ramasubramani <vyasr@nvidia.com>"]
+license = "Apache 2.0"
 readme = "README.md"
-requires-python = ">=3.9"
-dependencies = [
-]
+
+[tool.poetry.dependencies]
+python = ">=3.9"
 
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
