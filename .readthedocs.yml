@@ -8,7 +8,7 @@ build:
     python: "3.13"
 
 sphinx:
-  configuration: docs/source/conf.py
+  configuration: doc/source/conf.py
   fail_on_warning: true
 
 python:
